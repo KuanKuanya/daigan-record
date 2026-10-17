@@ -1,0 +1,56 @@
+package com.daigan.record.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import com.daigan.record.data.local.entity.OwnerEntity
+import java.time.Instant
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface OwnerDao {
+
+    @Query("SELECT * FROM owners WHERE archivedAt IS NULL ORDER BY number ASC")
+    fun observeActive(): Flow<List<OwnerEntity>>
+
+    @Query("SELECT * FROM owners WHERE archivedAt IS NOT NULL ORDER BY number ASC")
+    fun observeArchived(): Flow<List<OwnerEntity>>
+
+    @Query("SELECT * FROM owners ORDER BY number ASC")
+    fun observeAll(): Flow<List<OwnerEntity>>
+
+    @Query("SELECT * FROM owners WHERE id = :ownerId")
+    fun observeById(ownerId: String): Flow<OwnerEntity?>
+
+    @Query("SELECT * FROM owners WHERE id = :ownerId")
+    suspend fun findById(ownerId: String): OwnerEntity?
+
+    @Query("SELECT COUNT(*) FROM owners")
+    suspend fun count(): Int
+
+    @Insert
+    suspend fun insert(owner: OwnerEntity)
+
+    @Query("UPDATE owners SET nickname = :nickname, updatedAt = :updatedAt WHERE id = :ownerId")
+    suspend fun updateNickname(ownerId: String, nickname: String, updatedAt: Instant)
+
+    @Query("UPDATE owners SET archivedAt = :archivedAt, updatedAt = :archivedAt WHERE id = :ownerId")
+    suspend fun archive(ownerId: String, archivedAt: Instant)
+
+    @Query("UPDATE owners SET archivedAt = NULL, updatedAt = :updatedAt WHERE id = :ownerId")
+    suspend fun restore(ownerId: String, updatedAt: Instant)
+
+    /**
+     * Number allocation helpers. They must always run inside a single database
+     * transaction together with the owner insert: the UPDATE statement takes the
+     * write lock, and the unique index on owners.number is the final guard.
+     */
+    @Query("INSERT OR IGNORE INTO owner_number_sequence (id, nextNumber) VALUES (0, 1)")
+    suspend fun ensureNumberSequence()
+
+    @Query("UPDATE owner_number_sequence SET nextNumber = nextNumber + 1 WHERE id = 0")
+    suspend fun incrementNumberSequence()
+
+    @Query("SELECT nextNumber - 1 FROM owner_number_sequence WHERE id = 0")
+    suspend fun lastAllocatedNumber(): Int
+}

@@ -1,0 +1,57 @@
+package com.daigan.record.feature.accounts
+
+import com.daigan.record.data.model.AccountDraft
+import com.daigan.record.data.model.AccountField
+import com.daigan.record.data.model.ArchivedAccount
+import com.daigan.record.data.model.OwnerDetail
+import com.daigan.record.data.model.OwnerSummary
+
+sealed interface OwnersUiState {
+    data object Loading : OwnersUiState
+
+    data class Success(
+        val owners: List<OwnerSummary>,
+        val archivedCount: Int,
+    ) : OwnersUiState
+
+    data class Error(val message: String) : OwnersUiState
+}
+
+sealed interface OwnerDetailUiState {
+    data object Loading : OwnerDetailUiState
+
+    data class Success(val detail: OwnerDetail) : OwnerDetailUiState
+
+    data object NotFound : OwnerDetailUiState
+
+    data class Error(val message: String) : OwnerDetailUiState
+}
+
+data class OwnerFormUiState(
+    val isEdit: Boolean = false,
+    val numberLabel: String = "自动生成",
+    val nickname: String = "",
+    val nicknameError: String? = null,
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val saveError: String? = null,
+    val completed: Boolean = false,
+)
+
+data class AccountFormUiState(
+    val isEdit: Boolean = false,
+    val ownerNickname: String? = null,
+    val draft: AccountDraft = AccountDraft(),
+    val errors: Map<AccountField, String> = emptyMap(),
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val saveError: String? = null,
+    val completed: Boolean = false,
+)
+
+data class ArchivedRecordsUiState(
+    val isLoading: Boolean = true,
+    val archivedOwners: List<OwnerSummary> = emptyList(),
+    val archivedAccounts: List<ArchivedAccount> = emptyList(),
+    val error: String? = null,
+)

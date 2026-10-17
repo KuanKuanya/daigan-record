@@ -17,5 +17,8 @@
 
 <resources>
 
-    <style name="Theme.MyApplication" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Light launch window; the in-app Compose theme follows the system setting. -->
+    <style name="Theme.DaiganRecord" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
 </resources>

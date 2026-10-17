@@ -25,17 +25,17 @@ plugins {
 }
 
 android {
-    namespace = "android.template"
+    namespace = "com.daigan.record"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "android.template"
-        minSdk = 23
+        applicationId = "com.daigan.record"
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "android.template.HiltTestRunner"
+        testInstrumentationRunner = "com.daigan.record.HiltTestRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -75,6 +75,12 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    sourceSets {
+        // Exported Room schemas are the historical-schema fixtures used by
+        // MigrationTestHelper in instrumented tests.
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
 }
 
 dependencies {
@@ -106,11 +112,15 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    // Upgrades the transitively pinned kotlinx-serialization-core so the generated
+    // serializers used by room-testing (androidTest) link against the same runtime.
+    implementation(libs.kotlinx.serialization.core)
 
     // Compose
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     // Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
     // Instrumented tests
@@ -126,4 +136,11 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.room.testing)
+    // Espresso 3.5 (pulled in by compose ui-test) crashes on API 36 because of the
+    // removed InputManager.getInstance() hidden API; 3.7 fixes that.
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    // room-testing serializes schema bundles with generated serializers that need a
+    // newer serialization runtime than the transitively pinned 1.7.3.
+    androidTestImplementation(libs.kotlinx.serialization.json)
 }
