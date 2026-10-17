@@ -54,7 +54,7 @@ internal fun OwnerFormScreen(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(
-            title = if (uiState.isEdit) "编辑老板" else "新增老板",
+            title = if (uiState.isEdit) "编辑老板" else "新增",
             subtitle = if (uiState.isEdit) "编号固定，昵称可修改" else "编号将在保存后自动生成",
             onBack = onBack,
         )

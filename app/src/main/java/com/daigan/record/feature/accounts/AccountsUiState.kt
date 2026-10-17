@@ -41,6 +41,8 @@ data class OwnerFormUiState(
 data class AccountFormUiState(
     val isEdit: Boolean = false,
     val ownerNickname: String? = null,
+    /** True when the form was opened before its owner was archived (stale form). */
+    val ownerArchived: Boolean = false,
     val draft: AccountDraft = AccountDraft(),
     val errors: Map<AccountField, String> = emptyMap(),
     val isLoading: Boolean = false,

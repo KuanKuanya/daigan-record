@@ -14,15 +14,13 @@ import org.junit.runner.RunWith
 /**
  * Migration test infrastructure.
  *
- * Phase 1 ships database version 1, so there is no production upgrade to fake here.
- * Instead this test proves the harness works end to end with an isolated historical
- * schema fixture: the committed `schemas/.../1.json` behaves as the historical schema,
- * a database is created from it, rows are written with raw SQL, and Room then validates
- * that the current schema still matches the fixture without losing data.
+ * A database is created from the committed `schemas/.../1.json` (the exact version 1
+ * DDL an installed app had on disk), filled with raw rows, and then upgraded by the
+ * shipped migrations. Room validates the result against the current schema and the
+ * rows must still be there.
  *
- * When Phase 2 (or later) bumps the schema version, a real migration test can be added
- * by copying the old exported JSON, creating that version, and calling
- * `runMigrationsAndValidate(dbName, <newVersion>, true, MIGRATION_X_Y)`.
+ * The version specific assertions live in `MigrationV1ToV2Test`; this test keeps the
+ * harness itself checked against the current database version.
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationInfrastructureTest {
@@ -44,7 +42,7 @@ class MigrationInfrastructureTest {
     }
 
     @Test
-    fun historicalFixtureIsCreatedAndValidatedWithoutDataLoss() {
+    fun historicalFixtureIsUpgradedAndValidatedWithoutDataLoss() {
         helper.createDatabase(databaseName, 1).use { database ->
             database.execSQL(
                 """
@@ -66,7 +64,12 @@ class MigrationInfrastructureTest {
             )
         }
 
-        val validated = helper.runMigrationsAndValidate(databaseName, 1, true)
+        val validated = helper.runMigrationsAndValidate(
+            databaseName,
+            RECORD_DATABASE_VERSION,
+            true,
+            *RecordDatabase.ALL_MIGRATIONS,
+        )
 
         validated.query("SELECT nickname, number FROM owners WHERE id = 'owner-1'").use { cursor ->
             assertTrue("Fixture row must survive schema validation", cursor.moveToFirst())
@@ -86,14 +89,16 @@ class MigrationInfrastructureTest {
     }
 
     @Test
-    fun exportedSchemaForVersionOneExistsInAssets() {
+    fun exportedSchemasForEveryVersionExistInAssets() {
         val assets = instrumentation.context.assets
-        val schemaPath = "com.daigan.record.data.local.RecordDatabase/1.json"
 
-        val schema = assets.open(schemaPath).bufferedReader().use { it.readText() }
+        for (version in 1..RECORD_DATABASE_VERSION) {
+            val schemaPath = "com.daigan.record.data.local.RecordDatabase/$version.json"
+            val schema = assets.open(schemaPath).bufferedReader().use { it.readText() }
 
-        assertTrue(schema.contains("\"version\": 1"))
-        assertTrue(schema.contains("\"tableName\": \"owners\""))
-        assertTrue(schema.contains("\"tableName\": \"game_accounts\""))
+            assertTrue(schema.contains("\"version\": $version"))
+            assertTrue(schema.contains("\"tableName\": \"owners\""))
+            assertTrue(schema.contains("\"tableName\": \"game_accounts\""))
+        }
     }
 }

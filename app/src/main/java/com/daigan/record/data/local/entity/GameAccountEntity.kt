@@ -45,6 +45,12 @@ data class GameAccountEntity(
     val createdAt: Instant,
     val updatedAt: Instant,
     val archivedAt: Instant?,
+    /**
+     * Set only when the account was archived as part of an owner archive batch, and
+     * cleared when the account is restored. Accounts archived on their own always
+     * keep this null, so timestamp equality is never used as an identity.
+     */
+    val archiveBatchId: String? = null,
 ) {
     fun toModel(): GameAccount = GameAccount(
         id = id,
@@ -57,5 +63,6 @@ data class GameAccountEntity(
         password = password,
         createdAt = createdAt,
         archived = archivedAt != null,
+        archivedWithOwner = archiveBatchId != null,
     )
 }

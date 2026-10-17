@@ -17,10 +17,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
 /**
+ * User facing reason for every account write that is refused while the parent owner
+ * is archived. UI and repository share the same wording so the message a stale form
+ * shows matches the message the write layer enforces.
+ */
+const val ARCHIVED_OWNER_ACCOUNT_MESSAGE = "老板已归档，请先恢复老板后再操作游戏账号"
+
+/**
  * Game-account persistence boundary.
  *
- * Credentials stay in the repository/DAO layer: no logging, no analytics and no
- * file writes happen here. ViewModels only see domain models.
+ * Every write is validated inside its own database transaction: while an owner is
+ * archived its accounts are read-only, so hiding buttons is not the only defence.
+ * Credentials stay in the repository/DAO layer: no logging, no analytics and no file
+ * writes happen here. ViewModels only see domain models.
  */
 interface GameAccountRepository {
 
@@ -29,12 +38,16 @@ interface GameAccountRepository {
 
     suspend fun findAccount(accountId: String): GameAccount?
 
+    /** Rejected when the owner is archived. */
     suspend fun createAccount(ownerId: String, draft: AccountDraft): GameAccount
 
+    /** Rejected when the owner is archived or the account itself is archived. */
     suspend fun updateAccount(accountId: String, draft: AccountDraft): GameAccount
 
+    /** Rejected when the owner is archived. Already archived accounts are a no-op. */
     suspend fun archiveAccount(accountId: String)
 
+    /** Rejected when the owner is archived. Already active accounts are a no-op. */
     suspend fun restoreAccount(accountId: String)
 }
 
@@ -71,8 +84,7 @@ class DefaultGameAccountRepository @Inject constructor(
 
         val now = timeProvider.now()
         return database.withTransaction {
-            val owner = ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
-            check(owner.archivedAt == null) { "老板已归档，无法新增游戏账号" }
+            requireActiveOwner(ownerId)
             val entity = GameAccountEntity(
                 id = UUID.randomUUID().toString(),
                 ownerId = ownerId,
@@ -99,6 +111,9 @@ class DefaultGameAccountRepository @Inject constructor(
         val now = timeProvider.now()
         return database.withTransaction {
             val existing = accountDao.findById(accountId) ?: throw IllegalArgumentException("游戏账号不存在")
+            // A stale form may be submitted after the owner was archived elsewhere.
+            requireActiveOwner(existing.ownerId)
+            require(existing.archivedAt == null) { "游戏账号已归档，请先恢复后再编辑" }
             accountDao.update(
                 accountId = accountId,
                 gameName = normalized.gameName,
@@ -125,16 +140,29 @@ class DefaultGameAccountRepository @Inject constructor(
     override suspend fun archiveAccount(accountId: String) {
         val now = timeProvider.now()
         database.withTransaction {
-            accountDao.findById(accountId) ?: throw IllegalArgumentException("游戏账号不存在")
-            accountDao.setArchivedAt(accountId = accountId, archivedAt = now)
+            val account = accountDao.findById(accountId) ?: throw IllegalArgumentException("游戏账号不存在")
+            requireActiveOwner(account.ownerId)
+            // Idempotent: archiving twice keeps the original archive instant.
+            if (account.archivedAt != null) return@withTransaction
+            accountDao.archiveIndependently(accountId = accountId, archivedAt = now)
         }
     }
 
     override suspend fun restoreAccount(accountId: String) {
         val now = timeProvider.now()
         database.withTransaction {
-            accountDao.findById(accountId) ?: throw IllegalArgumentException("游戏账号不存在")
-            accountDao.clearArchivedAt(accountId = accountId, updatedAt = now)
+            val account = accountDao.findById(accountId) ?: throw IllegalArgumentException("游戏账号不存在")
+            // While the owner is archived its accounts are read-only, so an archived
+            // child can never be pulled back into an archived parent.
+            requireActiveOwner(account.ownerId)
+            if (account.archivedAt == null) return@withTransaction
+            accountDao.restoreIndependently(accountId = accountId, updatedAt = now)
         }
+    }
+
+    /** Must be called inside the write transaction so the state cannot change underneath. */
+    private suspend fun requireActiveOwner(ownerId: String) {
+        val owner = ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
+        require(owner.archivedAt == null) { ARCHIVED_OWNER_ACCOUNT_MESSAGE }
     }
 }

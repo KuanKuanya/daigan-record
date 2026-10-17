@@ -54,25 +54,49 @@ interface GameAccountDao {
         updatedAt: Instant,
     )
 
-    @Query(
-        "UPDATE game_accounts SET archivedAt = :archivedAt, updatedAt = :archivedAt " +
-            "WHERE ownerId = :ownerId AND archivedAt IS NULL"
-    )
-    suspend fun archiveAllForOwner(ownerId: String, archivedAt: Instant)
-
-    @Query("UPDATE game_accounts SET archivedAt = :archivedAt, updatedAt = :archivedAt WHERE id = :accountId")
-    suspend fun setArchivedAt(accountId: String, archivedAt: Instant)
-
-    @Query("UPDATE game_accounts SET archivedAt = NULL, updatedAt = :updatedAt WHERE id = :accountId")
-    suspend fun clearArchivedAt(accountId: String, updatedAt: Instant)
-
     /**
-     * Restores exactly the accounts that were archived together with their owner,
-     * identified by the shared archive timestamp.
+     * Archives the owner's still-active accounts and stamps them with the owner's
+     * archive batch. Accounts archived on their own keep their own state and their
+     * null batch id, so they are never adopted by the owner archive.
      */
     @Query(
-        "UPDATE game_accounts SET archivedAt = NULL, updatedAt = :updatedAt " +
-            "WHERE ownerId = :ownerId AND archivedAt = :archivedAt"
+        "UPDATE game_accounts SET archivedAt = :archivedAt, updatedAt = :archivedAt, " +
+            "archiveBatchId = :archiveBatchId WHERE ownerId = :ownerId AND archivedAt IS NULL"
     )
-    suspend fun restoreArchivedWithTimestamp(ownerId: String, archivedAt: Instant, updatedAt: Instant)
+    suspend fun archiveActiveAccountsForOwner(
+        ownerId: String,
+        archivedAt: Instant,
+        archiveBatchId: String,
+    )
+
+    /**
+     * Archives a single account independently. It deliberately stores no batch id:
+     * only an owner archive may claim ownership of an archived account.
+     */
+    @Query(
+        "UPDATE game_accounts SET archivedAt = :archivedAt, updatedAt = :archivedAt, " +
+            "archiveBatchId = NULL WHERE id = :accountId AND archivedAt IS NULL"
+    )
+    suspend fun archiveIndependently(accountId: String, archivedAt: Instant)
+
+    /** Restores a single account; already active accounts are untouched. */
+    @Query(
+        "UPDATE game_accounts SET archivedAt = NULL, archiveBatchId = NULL, updatedAt = :updatedAt " +
+            "WHERE id = :accountId AND archivedAt IS NOT NULL"
+    )
+    suspend fun restoreIndependently(accountId: String, updatedAt: Instant)
+
+    /**
+     * Restores exactly the accounts archived in the owner's batch. Accounts archived
+     * separately are excluded by the batch id even when their timestamps are identical.
+     */
+    @Query(
+        "UPDATE game_accounts SET archivedAt = NULL, archiveBatchId = NULL, updatedAt = :updatedAt " +
+            "WHERE ownerId = :ownerId AND archiveBatchId = :archiveBatchId AND archivedAt IS NOT NULL"
+    )
+    suspend fun restoreArchivedWithOwnerBatch(
+        ownerId: String,
+        archiveBatchId: String,
+        updatedAt: Instant,
+    )
 }

@@ -47,7 +47,15 @@ data class OwnerSummary(
     val owner: Owner,
     val accounts: List<GameAccount>,
 ) {
+    /** Active owners only carry active accounts; archived owners carry all of theirs. */
     val activeAccountCount: Int get() = accounts.size
+
+    /** Accounts archived together with this owner in the owner's archive batch. */
+    val accountsArchivedWithOwnerCount: Int get() = accounts.count { it.archivedWithOwner }
+
+    /** Archived accounts whose archive was requested separately from the owner archive. */
+    val independentlyArchivedAccountCount: Int
+        get() = accounts.count { it.archived && !it.archivedWithOwner }
 
     val gameNames: List<String>
         get() = accounts.map { it.gameName }.distinct()

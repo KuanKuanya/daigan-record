@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.daigan.record.data.model.AccountDraft
 import com.daigan.record.data.model.LoginMethod
+import com.daigan.record.data.repository.ARCHIVED_OWNER_ACCOUNT_MESSAGE
 import com.daigan.record.data.repository.GameAccountRepository
 import com.daigan.record.data.repository.OwnerRepository
 import com.daigan.record.ui.navigation.Routes
@@ -46,6 +47,7 @@ class AccountFormViewModel @Inject constructor(
                 state.copy(
                     isLoading = false,
                     ownerNickname = owner?.nickname,
+                    ownerArchived = owner?.archived == true,
                     draft = account?.let(AccountDraft::from) ?: state.draft,
                 )
             }
@@ -80,6 +82,13 @@ class AccountFormViewModel @Inject constructor(
     fun save() {
         val state = _uiState.value
         if (state.isSaving || state.isLoading) return
+        // The owner may have been archived while this form was open. The repository
+        // rejects the write inside its transaction as well; this is the fast path so a
+        // stale form cannot even try.
+        if (state.ownerArchived) {
+            _uiState.update { it.copy(saveError = ARCHIVED_OWNER_ACCOUNT_MESSAGE) }
+            return
+        }
         val errors = state.draft.validate()
         if (errors.isNotEmpty()) {
             _uiState.update { it.copy(errors = errors) }

@@ -128,8 +128,12 @@ class OwnerDetailScreenTest {
         composeTestRule.onNodeWithText("归档账号").assertExists()
     }
 
+    /**
+     * An archived owner may only be restored as a whole. Its accounts stay viewable but
+     * offer no enabled action: no add, no edit, no separate archive and no separate restore.
+     */
     @Test
-    fun archivedOwnerShowsRestoreInsteadOfEditing() {
+    fun archivedOwnerOffersNoAccountActionsButKeepsTheAccountsReadable() {
         setDetailContent(
             ownerDetail(
                 owner = owner(archived = true),
@@ -138,8 +142,34 @@ class OwnerDetailScreenTest {
             ),
         )
 
+        // Restoring the owner remains available.
         composeTestRule.onNodeWithContentDescription("恢复老板").assertExists()
-        composeTestRule.onNodeWithText("恢复").assertExists()
+
+        // Credentials of the archived account stay viewable.
+        composeTestRule.onNodeWithText("重返未来：1999").assertExists()
+        composeTestRule.onNodeWithText("登录信息 · 账号密码").performClick()
+        composeTestRule.onNodeWithText("demo-xiaoman").assertExists()
+
+        // No enabled account action is offered while the parent is archived.
+        composeTestRule.onNodeWithText("恢复").assertDoesNotExist()
         composeTestRule.onNodeWithText("新增账号").assertDoesNotExist()
+        composeTestRule.onNodeWithText("编辑账号").assertDoesNotExist()
+        composeTestRule.onNodeWithText("归档账号").assertDoesNotExist()
+        composeTestRule.onNodeWithText("恢复老板后可单独恢复此账号。").assertExists()
+    }
+
+    /** With an active owner an archived account can be restored individually. */
+    @Test
+    fun activeOwnerCanRestoreAnIndividuallyArchivedAccount() {
+        setDetailContent(
+            ownerDetail(
+                owner = owner(archived = false),
+                activeAccounts = emptyList(),
+                archivedAccounts = listOf(account(archived = true)),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").assertExists()
+        composeTestRule.onNodeWithText("恢复").assertExists()
     }
 }

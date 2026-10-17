@@ -48,6 +48,25 @@ fun ArchivedRecordsScreen(
         viewModel.messages.collect { message -> snackbarHostState.showSnackbar(message) }
     }
 
+    ArchivedRecordsScreen(
+        uiState = uiState,
+        onBack = onBack,
+        onRestoreOwner = viewModel::restoreOwner,
+        onRestoreAccount = viewModel::restoreAccount,
+        snackbarHostState = snackbarHostState,
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun ArchivedRecordsScreen(
+    uiState: ArchivedRecordsUiState,
+    onBack: () -> Unit,
+    onRestoreOwner: (String) -> Unit,
+    onRestoreAccount: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+) {
     Scaffold(
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -82,8 +101,8 @@ fun ArchivedRecordsScreen(
                 else -> ArchivedList(
                     owners = uiState.archivedOwners,
                     accounts = uiState.archivedAccounts,
-                    onRestoreOwner = viewModel::restoreOwner,
-                    onRestoreAccount = viewModel::restoreAccount,
+                    onRestoreOwner = onRestoreOwner,
+                    onRestoreAccount = onRestoreAccount,
                 )
             }
         }
@@ -124,7 +143,7 @@ private fun ArchivedList(
                             StatusTag(text = summary.owner.displayNumber)
                         }
                         Text(
-                            text = "${summary.activeAccountCount} 个随老板归档的游戏账号",
+                            text = archivedOwnerAccountSummary(summary),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 6.dp),
@@ -175,5 +194,21 @@ private fun ArchivedList(
                 }
             }
         }
+    }
+}
+
+/**
+ * Describes only what is known: the total count and how many accounts belong to the
+ * current owner archive batch. Accounts archived separately (or archived by a legacy
+ * version whose provenance cannot be recovered) are not claimed as "archived with the
+ * owner", and they stay restorable one by one after the owner is restored.
+ */
+internal fun archivedOwnerAccountSummary(summary: OwnerSummary): String {
+    val total = summary.accounts.size
+    val withOwner = summary.accountsArchivedWithOwnerCount
+    return when {
+        total == 0 -> "归档时没有游戏账号"
+        withOwner == total -> "$total 个随老板归档的游戏账号"
+        else -> "共 $total 个游戏账号，其中 $withOwner 个随老板归档"
     }
 }

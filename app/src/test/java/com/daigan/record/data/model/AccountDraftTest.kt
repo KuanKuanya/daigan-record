@@ -128,6 +128,7 @@ class AccountDraftTest {
             password = "secret",
             createdAt = java.time.Instant.EPOCH,
             archived = false,
+            archivedWithOwner = false,
         )
 
         val draft = AccountDraft.from(stored)

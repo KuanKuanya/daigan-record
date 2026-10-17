@@ -216,6 +216,14 @@ internal fun AccountFormScreen(
                 )
             }
 
+            if (uiState.ownerArchived) {
+                Text(
+                    text = "老板已归档，账号只能查看；请先在归档记录中恢复老板。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
             if (uiState.saveError != null) {
                 Text(
                     text = uiState.saveError,
@@ -226,7 +234,7 @@ internal fun AccountFormScreen(
 
             Button(
                 onClick = onSave,
-                enabled = !uiState.isSaving,
+                enabled = !uiState.isSaving && !uiState.ownerArchived,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),

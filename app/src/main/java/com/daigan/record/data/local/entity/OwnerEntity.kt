@@ -26,6 +26,12 @@ data class OwnerEntity(
     val createdAt: Instant,
     val updatedAt: Instant,
     val archivedAt: Instant?,
+    /**
+     * Identifier of the archive batch that archived this owner together with its
+     * accounts. Null while the owner is active, and null for rows archived by a
+     * legacy version that could not record provenance.
+     */
+    val archiveBatchId: String? = null,
 ) {
     fun toModel(): Owner = Owner(
         id = id,

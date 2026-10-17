@@ -22,6 +22,7 @@ object DatabaseModule {
         Room.databaseBuilder(context, RecordDatabase::class.java, RecordDatabase.NAME)
             // No fallbackToDestructiveMigration: every schema change needs a real
             // migration that is covered by the migration test infrastructure.
+            .addMigrations(*RecordDatabase.ALL_MIGRATIONS)
             .build()
 
     @Provides

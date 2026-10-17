@@ -34,10 +34,21 @@ interface OwnerDao {
     @Query("UPDATE owners SET nickname = :nickname, updatedAt = :updatedAt WHERE id = :ownerId")
     suspend fun updateNickname(ownerId: String, nickname: String, updatedAt: Instant)
 
-    @Query("UPDATE owners SET archivedAt = :archivedAt, updatedAt = :archivedAt WHERE id = :ownerId")
-    suspend fun archive(ownerId: String, archivedAt: Instant)
+    /**
+     * Archives the owner and records the archive batch that its accounts share.
+     * Already archived owners are left untouched so provenance is never overwritten.
+     */
+    @Query(
+        "UPDATE owners SET archivedAt = :archivedAt, updatedAt = :archivedAt, " +
+            "archiveBatchId = :archiveBatchId WHERE id = :ownerId AND archivedAt IS NULL"
+    )
+    suspend fun archive(ownerId: String, archivedAt: Instant, archiveBatchId: String)
 
-    @Query("UPDATE owners SET archivedAt = NULL, updatedAt = :updatedAt WHERE id = :ownerId")
+    /** Restores the owner and clears its batch id; already active owners are untouched. */
+    @Query(
+        "UPDATE owners SET archivedAt = NULL, archiveBatchId = NULL, updatedAt = :updatedAt " +
+            "WHERE id = :ownerId AND archivedAt IS NOT NULL"
+    )
     suspend fun restore(ownerId: String, updatedAt: Instant)
 
     /**

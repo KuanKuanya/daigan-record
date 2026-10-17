@@ -38,10 +38,16 @@ interface OwnerRepository {
     /** Changes the nickname only; the owner number is immutable. */
     suspend fun renameOwner(ownerId: String, nickname: String)
 
-    /** Archives the owner and its currently active accounts in one transaction. */
+    /**
+     * Archives the owner and its currently active accounts in one transaction, recording
+     * an explicit archive batch id. Repeated calls are no-ops and never re-stamp the batch.
+     */
     suspend fun archiveOwner(ownerId: String)
 
-    /** Restores the owner and exactly the accounts archived together with it. */
+    /**
+     * Restores the owner and exactly the accounts stamped with its archive batch id.
+     * Accounts archived independently stay archived. Repeated calls are no-ops.
+     */
     suspend fun restoreOwner(ownerId: String)
 }
 
@@ -111,6 +117,7 @@ class DefaultOwnerRepository @Inject constructor(
                         createdAt = now,
                         updatedAt = now,
                         archivedAt = null,
+                        archiveBatchId = null,
                     )
                     ownerDao.insert(entity)
                     entity.toModel()
@@ -137,10 +144,20 @@ class DefaultOwnerRepository @Inject constructor(
         val now = timeProvider.now()
         database.withTransaction {
             val owner = ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
-            if (owner.archivedAt == null) {
-                ownerDao.archive(ownerId = ownerId, archivedAt = now)
-                accountDao.archiveAllForOwner(ownerId = ownerId, archivedAt = now)
-            }
+            // Idempotent: a second archive must not create a new batch or re-stamp rows,
+            // otherwise a later restore would lose the accounts of the original batch.
+            if (owner.archivedAt != null) return@withTransaction
+
+            // The batch id is the identity of "archived together with its owner".
+            // Timestamps are not used for that decision: two independent archives can
+            // share a millisecond.
+            val batchId = UUID.randomUUID().toString()
+            ownerDao.archive(ownerId = ownerId, archivedAt = now, archiveBatchId = batchId)
+            accountDao.archiveActiveAccountsForOwner(
+                ownerId = ownerId,
+                archivedAt = now,
+                archiveBatchId = batchId,
+            )
         }
     }
 
@@ -148,13 +165,22 @@ class DefaultOwnerRepository @Inject constructor(
         val now = timeProvider.now()
         database.withTransaction {
             val owner = ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
-            val archivedAt = owner.archivedAt ?: return@withTransaction
+            // Idempotent: restoring an active owner changes nothing.
+            if (owner.archivedAt == null) return@withTransaction
+
+            // Read the provenance before the restore clears it.
+            val batchId = owner.archiveBatchId
             ownerDao.restore(ownerId = ownerId, updatedAt = now)
-            accountDao.restoreArchivedWithTimestamp(
-                ownerId = ownerId,
-                archivedAt = archivedAt,
-                updatedAt = now,
-            )
+            // Legacy rows migrated from version 1 have no batch id. Their original
+            // provenance cannot be reconstructed, so nothing is restored automatically:
+            // every account stays archived and can be restored explicitly by the user.
+            if (batchId != null) {
+                accountDao.restoreArchivedWithOwnerBatch(
+                    ownerId = ownerId,
+                    archiveBatchId = batchId,
+                    updatedAt = now,
+                )
+            }
         }
     }
 

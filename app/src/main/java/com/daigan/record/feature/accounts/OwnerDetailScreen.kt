@@ -228,7 +228,7 @@ internal fun OwnerDetailContent(
                         )
                         if (archived) {
                             Text(
-                                text = "该老板已归档，恢复后可继续编辑账号。",
+                                text = "该老板已归档：账号只能查看，恢复老板后可单独恢复账号。",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 8.dp),
@@ -270,7 +270,7 @@ internal fun OwnerDetailContent(
             items(detail.activeAccounts, key = { it.id }) { account ->
                 AccountCard(
                     account = account,
-                    readOnly = archived,
+                    ownerArchived = archived,
                     onEdit = { onEditAccount(account.ownerId, account.id) },
                     onArchive = { onArchiveAccount(account.id) },
                     onRestore = { onRestoreAccount(account.id) },
@@ -304,7 +304,7 @@ internal fun OwnerDetailContent(
                 items(detail.archivedAccounts, key = { "archived-${it.id}" }) { account ->
                     AccountCard(
                         account = account,
-                        readOnly = true,
+                        ownerArchived = archived,
                         onEdit = {},
                         onArchive = {},
                         onRestore = { onRestoreAccount(account.id) },
@@ -319,7 +319,8 @@ internal fun OwnerDetailContent(
 @Composable
 private fun AccountCard(
     account: GameAccount,
-    readOnly: Boolean,
+    /** While the parent owner is archived the account is view only: no actions at all. */
+    ownerArchived: Boolean,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
     onRestore: () -> Unit,
@@ -444,45 +445,65 @@ private fun AccountCard(
                 }
             }
 
-            if (!readOnly) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                OutlinedButton(
-                    onClick = {},
-                    enabled = false,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text(text = "为这个账号接新单", modifier = Modifier.padding(start = 6.dp))
-                }
-                Text(
-                    text = "订单功能将在第二阶段提供，当前入口不可用。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                ) {
-                    TextButton(onClick = onEdit) { Text("编辑账号") }
-                    Box(modifier = Modifier.weight(1f))
-                    TextButton(onClick = { showArchiveDialog = true }) { Text("归档账号") }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            when {
+                // The owner archive owns the whole subtree: nothing here is actionable.
+                ownerArchived -> {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                     Text(
-                        text = "已归档",
+                        text = "已归档 · 老板归档期间只能查看",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
                     )
-                    Button(onClick = onRestore) { Text("恢复") }
+                    Text(
+                        text = "恢复老板后可单独恢复此账号。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+
+                account.archived -> {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "已归档",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(onClick = onRestore) { Text("恢复") }
+                    }
+                }
+
+                else -> {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    OutlinedButton(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text(text = "为这个账号接新单", modifier = Modifier.padding(start = 6.dp))
+                    }
+                    Text(
+                        text = "订单功能将在第二阶段提供，当前入口不可用。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    ) {
+                        TextButton(onClick = onEdit) { Text("编辑账号") }
+                        Box(modifier = Modifier.weight(1f))
+                        TextButton(onClick = { showArchiveDialog = true }) { Text("归档账号") }
+                    }
                 }
             }
         }

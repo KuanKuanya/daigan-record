@@ -3,6 +3,7 @@ package com.daigan.record.feature.accounts
 import androidx.lifecycle.SavedStateHandle
 import com.daigan.record.data.model.AccountField
 import com.daigan.record.data.model.LoginMethod
+import com.daigan.record.data.repository.ARCHIVED_OWNER_ACCOUNT_MESSAGE
 import com.daigan.record.testing.FakeGameAccountRepository
 import com.daigan.record.testing.FakeOwnerRepository
 import com.daigan.record.testing.MainDispatcherRule
@@ -135,5 +136,34 @@ class AccountFormViewModelTest {
 
         assertTrue(accountRepository.createdDrafts.isEmpty())
         assertEquals("渠道服", accountRepository.updatedDrafts.single().server)
+    }
+
+    /**
+     * A form that was opened before the owner was archived must not submit anything:
+     * the stale form is refused before the repository is even called.
+     */
+    @Test
+    fun `an archived owner blocks a stale account form`() = runTest {
+        ownerRepository.ownersById["owner-1"] = owner(number = 1, nickname = "小满", archived = true)
+        val viewModel = AccountFormViewModel(
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    Routes.OWNER_ID_ARG to "owner-1",
+                    Routes.ACCOUNT_ID_ARG to null,
+                ),
+            ),
+            ownerRepository = ownerRepository,
+            accountRepository = accountRepository,
+        )
+        viewModel.onDraftChange {
+            it.copy(gameName = "鸣潮", server = "国服", uid = "10002136", loginAccount = "demo")
+        }
+
+        assertTrue(viewModel.uiState.value.ownerArchived)
+        viewModel.save()
+
+        assertTrue(accountRepository.createdDrafts.isEmpty())
+        assertFalse(viewModel.uiState.value.completed)
+        assertEquals(ARCHIVED_OWNER_ACCOUNT_MESSAGE, viewModel.uiState.value.saveError)
     }
 }

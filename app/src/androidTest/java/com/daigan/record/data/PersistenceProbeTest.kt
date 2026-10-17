@@ -44,7 +44,11 @@ class PersistenceProbeTest {
     private val probeUid = "probe-uid-0001"
 
     private fun openDatabase(): RecordDatabase =
-        Room.databaseBuilder(context, RecordDatabase::class.java, RecordDatabase.NAME).build()
+        Room.databaseBuilder(context, RecordDatabase::class.java, RecordDatabase.NAME)
+            // The probe opens the real app database, which may still be at an older
+            // version on the device, so it must run the shipped migrations too.
+            .addMigrations(*RecordDatabase.ALL_MIGRATIONS)
+            .build()
 
     @Test
     fun aSeedData() = runBlocking {

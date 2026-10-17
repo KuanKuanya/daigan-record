@@ -45,6 +45,7 @@ fun account(
     loginMethod: LoginMethod = LoginMethod.PASSWORD,
     password: String? = "demo1999",
     archived: Boolean = false,
+    archivedWithOwner: Boolean = false,
 ): GameAccount = GameAccount(
     id = id,
     ownerId = ownerId,
@@ -56,6 +57,7 @@ fun account(
     password = password,
     createdAt = fixedInstant,
     archived = archived,
+    archivedWithOwner = archivedWithOwner,
 )
 
 class FakeOwnerRepository : OwnerRepository {

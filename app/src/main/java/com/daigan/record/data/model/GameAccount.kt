@@ -14,6 +14,12 @@ data class GameAccount(
     val password: String?,
     val createdAt: Instant,
     val archived: Boolean,
+    /**
+     * True only when the account is archived because its owner was archived in the
+     * same batch. Restoring the owner restores exactly these accounts; independently
+     * archived accounts stay archived.
+     */
+    val archivedWithOwner: Boolean,
 ) {
     val hasStoredPassword: Boolean
         get() = loginMethod == LoginMethod.PASSWORD && !password.isNullOrEmpty()

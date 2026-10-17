@@ -47,7 +47,8 @@ class ArchivedRecordsViewModel @Inject constructor(
     fun restoreOwner(ownerId: String) {
         viewModelScope.launch {
             runCatching { ownerRepository.restoreOwner(ownerId) }
-                .onSuccess { _messages.emit("已恢复老板及其账号") }
+                // Accounts archived separately stay archived, so do not promise more.
+                .onSuccess { _messages.emit("已恢复老板") }
                 .onFailure { _messages.emit("恢复失败：${it.message ?: "未知错误"}") }
         }
     }
