@@ -58,6 +58,8 @@ class BatchCompletionTest {
         val secondBeforeUndo = env.orderRepository.observeOrderDetail(second).first()!!
         assertEquals(1, secondBeforeUndo.occurrences.count { it.completedAt != null })
 
+        val noOp = env.orderRepository.completeAllHosting("repeat-${batch.batchId}", env.hostingSnapshots())
+        assertEquals(0, noOp.completedCount)
         val undo = env.orderRepository.undoBatch(batch.batchId)
         assertEquals(1, undo.restoredCount)
         assertTrue(undo.conflicts.isEmpty())
@@ -109,6 +111,8 @@ class BatchCompletionTest {
 
         val again = env.orderRepository.completeHostingOrder(orderId, "different-operation", env.hostingSnapshot(orderId))
         assertEquals(0, again.completedCount)
+        assertEquals(1, env.orderRepository.undoBatch(first.batchId).restoredCount)
+        assertNull(env.orderRepository.observeOrderDetail(orderId).first()!!.occurrences.single().completedAt)
     }
 
     @Test
@@ -185,6 +189,8 @@ class BatchCompletionTest {
         assertNotNull(after.order.completedAt)
         assertTrue(after.tasks.all { it.completed })
 
+        val noOp = env.orderRepository.completeShortOrder(orderId, "short-repeat")
+        assertEquals(0, noOp.completedCount)
         val undo = env.orderRepository.undoBatch(result.batchId)
         assertEquals(1, undo.restoredCount)
         after = env.orderRepository.observeOrderDetail(orderId).first()!!

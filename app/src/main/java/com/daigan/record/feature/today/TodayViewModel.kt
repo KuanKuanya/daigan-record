@@ -59,6 +59,8 @@ class TodayViewModel @Inject constructor(
 
     private val selectedTab = MutableStateFlow(TodayTab.HOSTING)
     private val refreshTick = MutableStateFlow(0L)
+    // ViewModel actions run on Main; acquire before launch so queued taps cannot overlap.
+    private var batchActionInFlight = false
     private val lastBatchId = MutableStateFlow<String?>(null)
     private val undoResult = MutableStateFlow<UndoResult?>(null)
     private val completedExpanded = MutableStateFlow(false)
@@ -123,10 +125,10 @@ class TodayViewModel @Inject constructor(
     fun completeAllHosting() {
         val operationId = UUID.randomUUID().toString()
         val displayed = uiState.value.hosting.map { it.toDisplayedSnapshot() }
-        viewModelScope.launch {
+        launchBatchAction {
             runCatching { orderRepository.completeAllHosting(operationId, displayed) }
                 .onSuccess { result ->
-                    lastBatchId.value = result.batchId
+                    if (result.completedCount > 0) lastBatchId.value = result.batchId
                     _messages.tryEmit(
                         if (result.alreadyApplied) {
                             "该批量操作已经生效"
@@ -144,17 +146,30 @@ class TodayViewModel @Inject constructor(
         val displayed = uiState.value.hosting
             .firstOrNull { it.order.id == orderId }
             ?.toDisplayedSnapshot()
-        viewModelScope.launch {
+        launchBatchAction {
             runCatching {
                 val snapshot = displayed
                     ?: throw StaleOccurrenceException("展示数据已过期，请刷新后再试")
                 orderRepository.completeHostingOrder(orderId, operationId, snapshot)
             }
                 .onSuccess { result ->
-                    lastBatchId.value = result.batchId
+                    if (result.completedCount > 0) lastBatchId.value = result.batchId
                     _messages.tryEmit("该单已完成 ${result.completedCount} 项")
                 }
                 .onFailure { refreshAfterStale(it, "整单完成失败") }
+        }
+    }
+
+    /** Serialize completion and undo; a no-op must retain the last useful undo target. */
+    private fun launchBatchAction(block: suspend () -> Unit) {
+        if (batchActionInFlight) return
+        batchActionInFlight = true
+        viewModelScope.launch {
+            try {
+                block()
+            } finally {
+                batchActionInFlight = false
+            }
         }
     }
 
@@ -227,7 +242,7 @@ class TodayViewModel @Inject constructor(
 
     fun undoLastBatch() {
         val batchId = lastBatchId.value ?: return
-        viewModelScope.launch {
+        launchBatchAction {
             runCatching { orderRepository.undoBatch(batchId) }
                 .onSuccess { result ->
                     lastBatchId.value = null

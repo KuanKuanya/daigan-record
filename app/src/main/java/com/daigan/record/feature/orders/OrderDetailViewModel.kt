@@ -59,6 +59,8 @@ class OrderDetailViewModel @Inject constructor(
     val renewalApplied: SharedFlow<RenewalResult> = _renewalApplied
 
     private val refreshTick = MutableStateFlow(0L)
+    // ViewModel actions run on Main; acquire before launch so queued taps cannot overlap.
+    private var batchActionInFlight = false
 
     init {
         viewModelScope.launch {
@@ -126,14 +128,16 @@ class OrderDetailViewModel @Inject constructor(
     fun completeHostingOrder() {
         val operationId = UUID.randomUUID().toString()
         val displayed = _uiState.value.detail?.toDisplayedSnapshot()
-        viewModelScope.launch {
+        launchBatchAction {
             runCatching {
                 val snapshot = displayed
                     ?: throw StaleOccurrenceException("展示数据已过期，请刷新后再试")
                 orderRepository.completeHostingOrder(orderId, operationId, snapshot)
             }
                 .onSuccess { result ->
-                    _uiState.value = _uiState.value.copy(lastBatchId = result.batchId)
+                    if (result.completedCount > 0) {
+                        _uiState.value = _uiState.value.copy(lastBatchId = result.batchId)
+                    }
                     emit(
                         if (result.alreadyApplied) {
                             "该批量操作已经生效"
@@ -156,7 +160,7 @@ class OrderDetailViewModel @Inject constructor(
 
     fun undoLastBatch() {
         val batchId = _uiState.value.lastBatchId ?: return
-        viewModelScope.launch {
+        launchBatchAction {
             runCatching { orderRepository.undoBatch(batchId) }
                 .onSuccess { result ->
                     _uiState.value = _uiState.value.copy(
@@ -226,6 +230,19 @@ class OrderDetailViewModel @Inject constructor(
         }
     }
 
+    /** Serialize completion and undo; a no-op must retain the last useful undo target. */
+    private fun launchBatchAction(block: suspend () -> Unit) {
+        if (batchActionInFlight) return
+        batchActionInFlight = true
+        viewModelScope.launch {
+            try {
+                block()
+            } finally {
+                batchActionInFlight = false
+            }
+        }
+    }
+
     private fun runWrite(block: suspend () -> Unit) {
         viewModelScope.launch {
             runCatching { block() }
@@ -241,10 +258,12 @@ class OrderDetailViewModel @Inject constructor(
     }
 
     private fun runBatch(block: suspend () -> com.daigan.record.data.model.BulkCompletionResult) {
-        viewModelScope.launch {
+        launchBatchAction {
             runCatching { block() }
                 .onSuccess { result ->
-                    _uiState.value = _uiState.value.copy(lastBatchId = result.batchId)
+                    if (result.completedCount > 0) {
+                        _uiState.value = _uiState.value.copy(lastBatchId = result.batchId)
+                    }
                     emit(
                         if (result.alreadyApplied) {
                             "该批量操作已经生效"
