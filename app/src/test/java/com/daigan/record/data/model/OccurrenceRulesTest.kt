@@ -7,9 +7,11 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OccurrenceRulesTest {
@@ -194,5 +196,53 @@ class OccurrenceRulesTest {
         assertEquals("W:2026-10-12", slot!!.key)
         assertEquals(LocalDate.of(2026, 10, 14), slot.attributedDate)
         assertEquals(LocalDate.of(2026, 10, 18), slot.windowEnd)
+    }
+
+    @Test
+    fun `a one-time template task never produces a hosting occurrence`() {
+        val date = LocalDate.of(2026, 10, 19)
+        assertFalse(
+            OccurrenceRules.appliesOn(
+                RecurrenceType.ONE_TIME,
+                emptySet(),
+                null,
+                periodStart,
+                date,
+            ),
+        )
+        assertNull(
+            OccurrenceRules.slotForDate(
+                RecurrenceType.ONE_TIME,
+                emptySet(),
+                null,
+                periodStart,
+                periodEnd,
+                date,
+                rules,
+            ),
+        )
+        assertNull(
+            OccurrenceRules.slotForNow(
+                RecurrenceType.ONE_TIME,
+                emptySet(),
+                null,
+                periodStart,
+                periodEnd,
+                date,
+                rules,
+                Instant.parse("2026-10-19T02:00:00Z"),
+            ),
+        )
+        assertTrue(
+            OccurrenceRules.slotsForDate(
+                RecurrenceType.ONE_TIME,
+                emptySet(),
+                null,
+                periodStart,
+                periodEnd,
+                date,
+                rules,
+            ).isEmpty(),
+        )
     }
 }

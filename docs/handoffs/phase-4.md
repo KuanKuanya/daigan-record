@@ -97,7 +97,8 @@ Phase 4 只交付模板库、模板编辑、账号/建单默认值与模板文�
 **一次性任务**：`RecurrenceType.ONE_TIME` 是显式扩展。`OccurrenceRules` 对它不产生任何
 发生记录；托管草稿校验拒绝它，托管建单只取周期任务；短期单使用它但本来就不生成发生
 记录。没有把一次性任务静默映射成 `DAILY`。`OccurrenceRulesTest`/`TemplateDraftTest`
-覆盖这一点，Phase 1–3 的每日/每周语义未改。
+覆盖这一点（含 `OccurrenceRulesTest` 直接断言无发生槽位），Phase 1–3 的每日/每周
+语义未改。
 
 ## 6. 界面与可用性
 
@@ -119,7 +120,7 @@ Phase 4 只交付模板库、模板编辑、账号/建单默认值与模板文�
 ```text
 ./gradlew :app:testDebugUnitTest --rerun --offline --console=plain
 -> BUILD SUCCESSFUL
-   XML: 22 suites, 125 tests, 0 failures, 0 errors, 0 skipped
+   XML: 22 suites, 126 tests, 0 failures, 0 errors, 0 skipped
 ```
 
 ### 完整设备套件（最终提交代码）

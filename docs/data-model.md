@@ -139,7 +139,7 @@ Phase 2 新增的**归档守卫**（见第 5 节）在归档老板/账号时要�
 |---|---|---|
 | `id` | TEXT | 主键 |
 | `taskDefinitionId` | TEXT | → `task_definitions.id`，`RESTRICT` |
-| `occurrenceKey` | TEXT | 稳定键，见第 3 节 |
+| `occurrenceKey` | TEXT | 稳定键，见第 5 节 |
 | `gameDate` | TEXT | 归属游戏日期；周任务为窗口起始日 |
 | `windowStart` / `windowEnd` | TEXT | 可空；周任务窗口（已按托管期裁剪） |
 | `completedAt` | INTEGER | 可空；实际完成/记录时刻 |
