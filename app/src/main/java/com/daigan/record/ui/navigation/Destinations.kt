@@ -14,8 +14,14 @@ object Routes {
     const val OWNER_FORM = "accounts/owner-form?ownerId={ownerId}"
     const val ACCOUNT_FORM = "accounts/{ownerId}/account-form?accountId={accountId}"
 
+    const val ORDER_NEW = "orders/new?ownerId={ownerId}&accountId={accountId}"
+    const val ORDER_DETAIL = "orders/{orderId}"
+    const val ORDER_BACKFILL = "orders/{orderId}/backfill?periodId={periodId}"
+
     const val OWNER_ID_ARG = "ownerId"
     const val ACCOUNT_ID_ARG = "accountId"
+    const val ORDER_ID_ARG = "orderId"
+    const val PERIOD_ID_ARG = "periodId"
     const val SECTION_ARG = "section"
 
     val mainDestinations = setOf(TODAY, ACCOUNTS, STATS)
@@ -27,6 +33,14 @@ object Routes {
 
     fun accountForm(ownerId: String, accountId: String? = null): String =
         "accounts/$ownerId/account-form?accountId=${accountId.orEmpty()}"
+
+    fun orderNew(ownerId: String, accountId: String): String =
+        "orders/new?ownerId=$ownerId&accountId=$accountId"
+
+    fun orderDetail(orderId: String): String = "orders/$orderId"
+
+    fun orderBackfill(orderId: String, periodId: String): String =
+        "orders/$orderId/backfill?periodId=$periodId"
 
     fun settingsSection(section: SettingsSection): String = "settings/pending/${section.key}"
 }

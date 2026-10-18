@@ -2,10 +2,14 @@ package com.daigan.record.data.repository
 
 import android.database.sqlite.SQLiteConstraintException
 import androidx.room.withTransaction
+import com.daigan.record.core.time.GameCalendar
+import com.daigan.record.core.time.GameRefreshRules
 import com.daigan.record.core.time.TimeProvider
 import com.daigan.record.data.local.RecordDatabase
 import com.daigan.record.data.local.dao.GameAccountDao
+import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
+import com.daigan.record.data.local.entity.HostingPeriodEntity
 import com.daigan.record.data.local.entity.OwnerEntity
 import com.daigan.record.data.model.Owner
 import com.daigan.record.data.model.OwnerDetail
@@ -56,6 +60,7 @@ class DefaultOwnerRepository @Inject constructor(
     private val database: RecordDatabase,
     private val ownerDao: OwnerDao,
     private val accountDao: GameAccountDao,
+    private val orderDao: OrderDao,
     private val timeProvider: TimeProvider,
 ) : OwnerRepository {
 
@@ -147,6 +152,17 @@ class DefaultOwnerRepository @Inject constructor(
             // Idempotent: a second archive must not create a new batch or re-stamp rows,
             // otherwise a later restore would lose the accounts of the original batch.
             if (owner.archivedAt != null) return@withTransaction
+
+            // Do not hide active work behind an archive. Finished short orders and
+            // expired periods may be archived; unfinished work must be dealt with first.
+            require(orderDao.countUnfinishedShortOrdersForOwner(ownerId) == 0) {
+                ARCHIVED_OWNER_HAS_ACTIVE_WORK_MESSAGE
+            }
+            assertNoUnexpiredPeriod(
+                periods = orderDao.findHostingPeriodsForOwner(ownerId),
+                now = now,
+                message = ARCHIVED_OWNER_HAS_ACTIVE_WORK_MESSAGE,
+            )
 
             // The batch id is the identity of "archived together with its owner".
             // Timestamps are not used for that decision: two independent archives can

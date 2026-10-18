@@ -148,3 +148,91 @@ class FakeGameAccountRepository : GameAccountRepository {
 /** Exposes the repository flows for assertions without extra test utilities. */
 fun OwnerRepository.activeOwnerIds(): Flow<List<String>> =
     observeActiveOwners().map { owners -> owners.map { it.owner.id } }
+
+class FakeOrderRepository : com.daigan.record.data.repository.OrderRepository {
+    val hosting = MutableStateFlow<List<com.daigan.record.data.model.TodayHostingOrder>>(emptyList())
+    val shortOrders = MutableStateFlow<List<com.daigan.record.data.model.ShortWorkOrder>>(emptyList())
+    val details = MutableStateFlow<Map<String, com.daigan.record.data.model.OrderDetail>>(emptyMap())
+    val completedBatches = mutableListOf<Pair<String, String>>()
+
+    override fun observeOrdersForOwner(ownerId: String): Flow<List<com.daigan.record.data.model.OrderSummary>> =
+        MutableStateFlow(emptyList())
+
+    override fun observeOrderDetail(orderId: String): Flow<com.daigan.record.data.model.OrderDetail?> =
+        details.map { it[orderId] }
+
+    override fun observeTodayHosting() = hosting
+
+    override fun observeTodayShort() = shortOrders
+
+    override suspend fun createShortOrder(draft: com.daigan.record.data.model.ShortOrderDraft): String =
+        "short-order"
+
+    override suspend fun createHostingOrder(draft: com.daigan.record.data.model.HostingOrderDraft): String =
+        "hosting-order"
+
+    override suspend fun setShortTaskCompleted(taskId: String, completed: Boolean) = Unit
+
+    override suspend fun updateShortTaskProgress(
+        taskId: String,
+        value: java.math.BigDecimal,
+    ) = Unit
+
+    override suspend fun completeShortOrder(
+        orderId: String,
+        operationId: String,
+    ): com.daigan.record.data.model.BulkCompletionResult {
+        completedBatches += operationId to orderId
+        return com.daigan.record.data.model.BulkCompletionResult("batch", 1, 0, false)
+    }
+
+    override suspend fun setOccurrenceCompleted(
+        taskId: String,
+        completed: Boolean,
+        expectedOccurrenceKey: String?,
+    ) = Unit
+
+    override suspend fun updateOccurrenceProgress(
+        taskId: String,
+        value: java.math.BigDecimal,
+        expectedOccurrenceKey: String?,
+    ) = Unit
+
+    override suspend fun completeHostingOrder(
+        orderId: String,
+        operationId: String,
+        displayed: com.daigan.record.data.repository.DisplayedHostingSnapshot,
+    ): com.daigan.record.data.model.BulkCompletionResult =
+        com.daigan.record.data.model.BulkCompletionResult("batch", 1, 0, false)
+
+    override suspend fun completeAllHosting(
+        operationId: String,
+        displayed: List<com.daigan.record.data.repository.DisplayedHostingSnapshot>,
+    ): com.daigan.record.data.model.BulkCompletionResult =
+        com.daigan.record.data.model.BulkCompletionResult("batch", 1, 0, false)
+
+    override suspend fun undoBatch(batchId: String): com.daigan.record.data.model.UndoResult =
+        com.daigan.record.data.model.UndoResult(1, emptyList(), false)
+
+    override suspend fun setHistoricalCompletion(
+        orderId: String,
+        periodId: String,
+        taskId: String,
+        date: java.time.LocalDate,
+        completed: Boolean,
+        weeklyWindowStart: java.time.LocalDate?,
+    ): Boolean = true
+
+    override suspend fun renewHosting(
+        orderId: String,
+        operationId: String,
+        durationDays: Int,
+        priceCents: Long,
+    ): com.daigan.record.data.model.RenewalResult = com.daigan.record.data.model.RenewalResult(
+        periodId = "period-2",
+        periodIndex = 1,
+        startDate = java.time.LocalDate.of(2026, 10, 18),
+        endDate = java.time.LocalDate.of(2026, 11, 16),
+        alreadyApplied = false,
+    )
+}

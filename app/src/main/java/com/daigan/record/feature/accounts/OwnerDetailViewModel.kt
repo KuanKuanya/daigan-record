@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.daigan.record.data.repository.GameAccountRepository
+import com.daigan.record.data.repository.OrderRepository
 import com.daigan.record.data.repository.OwnerRepository
 import com.daigan.record.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,7 +14,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,6 +23,7 @@ class OwnerDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val ownerRepository: OwnerRepository,
     private val accountRepository: GameAccountRepository,
+    orderRepository: OrderRepository,
 ) : ViewModel() {
 
     private val ownerId: String = checkNotNull(savedStateHandle[Routes.OWNER_ID_ARG]) {
@@ -31,10 +33,19 @@ class OwnerDetailViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages
 
-    val uiState: StateFlow<OwnerDetailUiState> = ownerRepository.observeOwner(ownerId)
-        .map { detail ->
-            if (detail == null) OwnerDetailUiState.NotFound else OwnerDetailUiState.Success(detail)
+    val uiState: StateFlow<OwnerDetailUiState> = combine(
+        ownerRepository.observeOwner(ownerId),
+        orderRepository.observeOrdersForOwner(ownerId),
+    ) { detail, orders ->
+        if (detail == null) {
+            OwnerDetailUiState.NotFound
+        } else {
+            OwnerDetailUiState.Success(
+                detail = detail,
+                ordersByAccount = orders.groupBy { it.accountId },
+            )
         }
+    }
         .catch { emit(OwnerDetailUiState.Error("读取老板资料失败，请重试。")) }
         .stateIn(
             scope = viewModelScope,

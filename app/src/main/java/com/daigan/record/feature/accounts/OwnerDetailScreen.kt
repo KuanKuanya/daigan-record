@@ -54,6 +54,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.daigan.record.data.model.GameAccount
 import com.daigan.record.data.model.LoginMethod
+import com.daigan.record.data.model.Money
+import com.daigan.record.data.model.OrderSummary
 import com.daigan.record.data.model.OwnerDetail
 import com.daigan.record.ui.components.EmptyStateCard
 import com.daigan.record.ui.components.LabeledValue
@@ -70,6 +72,8 @@ fun OwnerDetailScreen(
     onEditOwner: (String) -> Unit,
     onAddAccount: (String) -> Unit,
     onEditAccount: (String, String) -> Unit,
+    onCreateOrder: (String) -> Unit,
+    onOpenOrder: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OwnerDetailViewModel = hiltViewModel(),
 ) {
@@ -123,6 +127,7 @@ fun OwnerDetailScreen(
 
             is OwnerDetailUiState.Success -> OwnerDetailContent(
                 detail = state.detail,
+                ordersByAccount = state.ordersByAccount,
                 onBack = onBack,
                 onEditOwner = { onEditOwner(state.detail.owner.id) },
                 onAddAccount = { onAddAccount(state.detail.owner.id) },
@@ -135,6 +140,8 @@ fun OwnerDetailScreen(
                 onRestoreOwner = viewModel::restoreOwner,
                 onArchiveAccount = viewModel::archiveAccount,
                 onRestoreAccount = viewModel::restoreAccount,
+                onCreateOrder = onCreateOrder,
+                onOpenOrder = onOpenOrder,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -154,6 +161,9 @@ internal fun OwnerDetailContent(
     onArchiveAccount: (String) -> Unit,
     onRestoreAccount: (String) -> Unit,
     modifier: Modifier = Modifier,
+    ordersByAccount: Map<String, List<OrderSummary>> = emptyMap(),
+    onCreateOrder: (String) -> Unit = {},
+    onOpenOrder: (String) -> Unit = {},
 ) {
     var showArchiveOwnerDialog by rememberSaveable { mutableStateOf(false) }
     val archived = detail.owner.archived
@@ -271,25 +281,13 @@ internal fun OwnerDetailContent(
                 AccountCard(
                     account = account,
                     ownerArchived = archived,
+                    orders = ordersByAccount[account.id].orEmpty(),
                     onEdit = { onEditAccount(account.ownerId, account.id) },
                     onArchive = { onArchiveAccount(account.id) },
                     onRestore = { onRestoreAccount(account.id) },
                     onCopy = onCopy,
-                )
-            }
-
-            item {
-                Text(
-                    text = "订单",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            item {
-                EmptyStateCard(
-                    title = "暂无订单",
-                    description = "订单、托管期次、打卡与收款将在第二阶段接入真实数据。" +
-                        "当前版本不会显示虚构的进行中订单或待收金额。",
+                    onCreateOrder = { onCreateOrder(account.id) },
+                    onOpenOrder = onOpenOrder,
                 )
             }
 
@@ -305,10 +303,13 @@ internal fun OwnerDetailContent(
                     AccountCard(
                         account = account,
                         ownerArchived = archived,
+                        orders = ordersByAccount[account.id].orEmpty(),
                         onEdit = {},
                         onArchive = {},
                         onRestore = { onRestoreAccount(account.id) },
                         onCopy = onCopy,
+                        onCreateOrder = {},
+                        onOpenOrder = onOpenOrder,
                     )
                 }
             }
@@ -321,10 +322,13 @@ private fun AccountCard(
     account: GameAccount,
     /** While the parent owner is archived the account is view only: no actions at all. */
     ownerArchived: Boolean,
+    orders: List<OrderSummary>,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
     onRestore: () -> Unit,
     onCopy: (String) -> Unit,
+    onCreateOrder: () -> Unit,
+    onOpenOrder: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable(account.id) { mutableStateOf(false) }
@@ -482,15 +486,14 @@ private fun AccountCard(
                 else -> {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                     OutlinedButton(
-                        onClick = {},
-                        enabled = false,
+                        onClick = onCreateOrder,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Text(text = "为这个账号接新单", modifier = Modifier.padding(start = 6.dp))
                     }
                     Text(
-                        text = "订单功能将在第二阶段提供，当前入口不可用。",
+                        text = "接单入口属于这个账号；同一账号可以同时有长期托管与短期订单。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -506,7 +509,64 @@ private fun AccountCard(
                     }
                 }
             }
+
+            if (orders.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    text = "订单 · ${orders.size}",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                orders.forEach { summary ->
+                    AccountOrderRow(summary = summary, onClick = { onOpenOrder(summary.order.id) })
+                }
+            } else if (!ownerArchived && !account.archived) {
+                Text(
+                    text = "该账号暂无订单。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun AccountOrderRow(summary: OrderSummary, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = summary.order.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = buildString {
+                    append(if (summary.order.isHosting) "长期托管" else "短期任务")
+                    summary.currentPeriod?.let { period ->
+                        append(" · 第 ${period.periodIndex + 1} 期")
+                        append(" · ${period.endDate}")
+                    }
+                    summary.order.priceCents?.let { append(" · ${Money.formatCents(it)}") }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        StatusTag(
+            text = when {
+                !summary.order.isHosting && summary.order.completed -> "已完成"
+                !summary.order.isHosting -> "进行中"
+                else -> "托管"
+            },
+        )
     }
 }
 

@@ -20,7 +20,11 @@ sealed interface OwnersUiState {
 sealed interface OwnerDetailUiState {
     data object Loading : OwnerDetailUiState
 
-    data class Success(val detail: OwnerDetail) : OwnerDetailUiState
+    data class Success(
+        val detail: OwnerDetail,
+        val ordersByAccount: Map<String, List<com.daigan.record.data.model.OrderSummary>> =
+            emptyMap(),
+    ) : OwnerDetailUiState
 
     data object NotFound : OwnerDetailUiState
 

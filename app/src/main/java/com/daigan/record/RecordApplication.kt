@@ -17,7 +17,27 @@
 package com.daigan.record
 
 import android.app.Application
+import com.daigan.record.data.repository.AttachmentRepository
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 @HiltAndroidApp
-class RecordApplication : Application()
+class RecordApplication : Application() {
+
+    @Inject
+    lateinit var attachmentRepository: AttachmentRepository
+
+    private val startupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onCreate() {
+        super.onCreate()
+        // Deferred cleanup of files whose database references were removed earlier.
+        startupScope.launch {
+            runCatching { attachmentRepository.cleanupOrphans() }
+        }
+    }
+}

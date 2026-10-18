@@ -3,8 +3,13 @@ package com.daigan.record.data.local.di
 import android.content.Context
 import androidx.room.Room
 import com.daigan.record.data.local.RecordDatabase
+import com.daigan.record.data.local.dao.AttachmentDao
+import com.daigan.record.data.local.dao.CompletionBatchDao
 import com.daigan.record.data.local.dao.GameAccountDao
+import com.daigan.record.data.local.dao.OccurrenceDao
+import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
+import com.daigan.record.data.local.dao.TaskDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,4 +35,20 @@ object DatabaseModule {
 
     @Provides
     fun provideGameAccountDao(database: RecordDatabase): GameAccountDao = database.gameAccountDao()
+
+    @Provides
+    fun provideOrderDao(database: RecordDatabase): OrderDao = database.orderDao()
+
+    @Provides
+    fun provideTaskDao(database: RecordDatabase): TaskDao = database.taskDao()
+
+    @Provides
+    fun provideOccurrenceDao(database: RecordDatabase): OccurrenceDao = database.occurrenceDao()
+
+    @Provides
+    fun provideCompletionBatchDao(database: RecordDatabase): CompletionBatchDao =
+        database.completionBatchDao()
+
+    @Provides
+    fun provideAttachmentDao(database: RecordDatabase): AttachmentDao = database.attachmentDao()
 }

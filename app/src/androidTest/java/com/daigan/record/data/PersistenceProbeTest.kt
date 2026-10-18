@@ -58,12 +58,14 @@ class PersistenceProbeTest {
             database = database,
             ownerDao = database.ownerDao(),
             accountDao = database.gameAccountDao(),
+            orderDao = database.orderDao(),
             timeProvider = time,
         )
         val accountRepository = DefaultGameAccountRepository(
             database = database,
             ownerDao = database.ownerDao(),
             accountDao = database.gameAccountDao(),
+            orderDao = database.orderDao(),
             timeProvider = time,
         )
 

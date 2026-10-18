@@ -55,3 +55,317 @@ fun ownerDetail(
     activeAccounts = activeAccounts,
     archivedAccounts = archivedAccounts,
 )
+
+fun shortOrderSummary(
+    orderId: String = "order-1",
+    accountId: String = "account-1",
+    title: String = "短期任务",
+    completed: Boolean = false,
+    ownerId: String = "owner-1",
+): com.daigan.record.data.model.OrderSummary {
+    val now = fixedInstant
+    return com.daigan.record.data.model.OrderSummary(
+        order = com.daigan.record.data.model.Order(
+            id = orderId,
+            accountId = accountId,
+            type = com.daigan.record.data.model.OrderType.SHORT_TASK,
+            title = title,
+            priceCents = 10000,
+            paymentMode = com.daigan.record.data.model.PaymentMode.ONE_TIME,
+            deadlineDate = java.time.LocalDate.of(2026, 10, 20),
+            notes = null,
+            refresh = com.daigan.record.data.model.GameRefreshRulesDomain(
+                zoneId = java.time.ZoneId.of("Asia/Shanghai"),
+                dailyRefresh = java.time.LocalTime.of(4, 0),
+                weeklyRefreshDay = java.time.DayOfWeek.MONDAY,
+                weeklyRefreshTime = java.time.LocalTime.of(5, 0),
+            ),
+            createdAt = now,
+            completedAt = if (completed) now else null,
+        ),
+        ownerId = ownerId,
+        ownerNumber = "B001",
+        ownerNickname = "小满",
+        accountId = accountId,
+        gameName = "重返未来：1999",
+        server = "官服",
+        currentPeriod = null,
+        taskCount = 1,
+        completedTaskCount = if (completed) 1 else 0,
+    )
+}
+
+fun hostingOrderForToday(
+    orderId: String = "hosting-1",
+    title: String = "日常托管",
+    status: com.daigan.record.core.time.HostingStatus =
+        com.daigan.record.core.time.HostingStatus.ACTIVE,
+    allCompleted: Boolean = false,
+    taskTitle: String = "每日签到",
+): com.daigan.record.data.model.TodayHostingOrder {
+    val today = java.time.LocalDate.of(2026, 10, 17)
+    val period = com.daigan.record.data.model.HostingPeriod(
+        id = "period-1",
+        orderId = orderId,
+        periodIndex = 0,
+        startDate = today.minusDays(5),
+        endDate = today.plusDays(5),
+        priceCents = 30000,
+        refresh = com.daigan.record.data.model.GameRefreshRulesDomain(
+            zoneId = java.time.ZoneId.of("Asia/Shanghai"),
+            dailyRefresh = java.time.LocalTime.of(4, 0),
+            weeklyRefreshDay = java.time.DayOfWeek.MONDAY,
+            weeklyRefreshTime = java.time.LocalTime.of(5, 0),
+        ),
+        createdAt = fixedInstant,
+        renewalOperationId = null,
+    )
+    val task = com.daigan.record.data.model.OrderTask(
+        id = "task-1",
+        orderId = orderId,
+        periodId = period.id,
+        title = taskTitle,
+        progressType = com.daigan.record.data.model.ProgressType.CHECKBOX,
+        startValue = java.math.BigDecimal.ZERO,
+        targetValue = java.math.BigDecimal.ONE,
+        currentValue = java.math.BigDecimal.ZERO,
+        unit = null,
+        recurrence = com.daigan.record.data.model.RecurrenceType.DAILY,
+        weekdays = emptySet(),
+        everyNDays = null,
+        sortOrder = 0,
+        completedAt = null,
+    )
+    return com.daigan.record.data.model.TodayHostingOrder(
+        order = com.daigan.record.data.model.Order(
+            id = orderId,
+            accountId = "account-1",
+            type = com.daigan.record.data.model.OrderType.HOSTING,
+            title = title,
+            priceCents = null,
+            paymentMode = com.daigan.record.data.model.PaymentMode.ONE_TIME,
+            deadlineDate = null,
+            notes = null,
+            refresh = period.refresh,
+            createdAt = fixedInstant,
+            completedAt = null,
+        ),
+        ownerId = "owner-1",
+        ownerNumber = "B001",
+        ownerNickname = "小满",
+        accountId = "account-1",
+        gameName = "重返未来：1999",
+        server = "官服",
+        period = period,
+        today = today,
+        status = status,
+        tasks = if (status == com.daigan.record.core.time.HostingStatus.ACTIVE) {
+            listOf(
+                com.daigan.record.data.model.TodayHostingTask(
+                    task = task,
+                    occurrenceId = null,
+                    slot = com.daigan.record.data.model.OccurrenceSlot(
+                        key = "D:$today",
+                        attributedDate = today,
+                        windowStart = today,
+                        windowEnd = today,
+                    ),
+                    completed = allCompleted,
+                    value = null,
+                    windowLabel = null,
+                ),
+            )
+        } else {
+            emptyList()
+        },
+    )
+}
+
+fun shortWorkOrderForToday(
+    orderId: String = "short-1",
+    deadline: java.time.LocalDate? = java.time.LocalDate.of(2026, 10, 15),
+): com.daigan.record.data.model.ShortWorkOrder {
+    val today = java.time.LocalDate.of(2026, 10, 17)
+    val task = com.daigan.record.data.model.OrderTask(
+        id = "task-1",
+        orderId = orderId,
+        periodId = null,
+        title = "推进主线",
+        progressType = com.daigan.record.data.model.ProgressType.CHECKBOX,
+        startValue = java.math.BigDecimal.ZERO,
+        targetValue = java.math.BigDecimal.ONE,
+        currentValue = java.math.BigDecimal.ZERO,
+        unit = null,
+        recurrence = com.daigan.record.data.model.RecurrenceType.DAILY,
+        weekdays = emptySet(),
+        everyNDays = null,
+        sortOrder = 0,
+        completedAt = null,
+    )
+    return com.daigan.record.data.model.ShortWorkOrder(
+        order = com.daigan.record.data.model.Order(
+            id = orderId,
+            accountId = "account-1",
+            type = com.daigan.record.data.model.OrderType.SHORT_TASK,
+            title = "短期任务",
+            priceCents = 10000,
+            paymentMode = com.daigan.record.data.model.PaymentMode.ONE_TIME,
+            deadlineDate = deadline,
+            notes = null,
+            refresh = com.daigan.record.data.model.GameRefreshRulesDomain(
+                zoneId = java.time.ZoneId.of("Asia/Shanghai"),
+                dailyRefresh = java.time.LocalTime.of(4, 0),
+                weeklyRefreshDay = java.time.DayOfWeek.MONDAY,
+                weeklyRefreshTime = java.time.LocalTime.of(5, 0),
+            ),
+            createdAt = fixedInstant,
+            completedAt = null,
+        ),
+        ownerId = "owner-1",
+        ownerNumber = "B001",
+        ownerNickname = "小满",
+        accountId = "account-1",
+        gameName = "重返未来：1999",
+        server = "官服",
+        tasks = listOf(
+            com.daigan.record.data.model.ShortWorkTask(
+                task = task,
+                completed = false,
+                currentValue = java.math.BigDecimal.ZERO,
+            ),
+        ),
+        today = today,
+    )
+}
+
+fun shortOrderDetailForUi(): com.daigan.record.data.model.OrderDetail {
+    val today = java.time.LocalDate.of(2026, 10, 17)
+    val order = com.daigan.record.data.model.Order(
+        id = "order-short",
+        accountId = "account-1",
+        type = com.daigan.record.data.model.OrderType.SHORT_TASK,
+        title = "短期任务",
+        priceCents = 10000,
+        paymentMode = com.daigan.record.data.model.PaymentMode.INSTALLMENTS,
+        deadlineDate = today.plusDays(2),
+        notes = "备注内容",
+        refresh = com.daigan.record.data.model.GameRefreshRulesDomain(
+            zoneId = java.time.ZoneId.of("Asia/Shanghai"),
+            dailyRefresh = java.time.LocalTime.of(4, 0),
+            weeklyRefreshDay = java.time.DayOfWeek.MONDAY,
+            weeklyRefreshTime = java.time.LocalTime.of(5, 0),
+        ),
+        createdAt = fixedInstant,
+        completedAt = null,
+    )
+    val task = com.daigan.record.data.model.OrderTask(
+        id = "task-short",
+        orderId = order.id,
+        periodId = null,
+        title = "推进主线",
+        progressType = com.daigan.record.data.model.ProgressType.CHECKBOX,
+        startValue = java.math.BigDecimal.ZERO,
+        targetValue = java.math.BigDecimal.ONE,
+        currentValue = java.math.BigDecimal.ZERO,
+        unit = null,
+        recurrence = com.daigan.record.data.model.RecurrenceType.DAILY,
+        weekdays = emptySet(),
+        everyNDays = null,
+        sortOrder = 0,
+        completedAt = null,
+    )
+    return com.daigan.record.data.model.OrderDetail(
+        order = order,
+        owner = owner(),
+        account = account(),
+        tasks = listOf(task),
+        periods = emptyList(),
+        occurrences = emptyList(),
+        attachments = emptyList(),
+        today = today,
+        now = fixedInstant,
+    )
+}
+
+fun expiredHostingDetailForUi(): com.daigan.record.data.model.OrderDetail =
+    hostingDetailForUi(
+        periodId = "period-expired",
+        startOffsetDays = -10,
+        endOffsetDays = -2,
+    )
+
+/**
+ * Running period: the 2026-10-17 game day is inside `[startDate, endDate]`, so the detail
+ * page renders live, toggleable task rows. The expired fixture cannot exercise a toggle —
+ * its history is read-only by design.
+ */
+fun activeHostingDetailForUi(): com.daigan.record.data.model.OrderDetail =
+    hostingDetailForUi(
+        periodId = "period-active",
+        startOffsetDays = -10,
+        endOffsetDays = 3,
+    )
+
+private fun hostingDetailForUi(
+    periodId: String,
+    startOffsetDays: Long,
+    endOffsetDays: Long,
+): com.daigan.record.data.model.OrderDetail {
+    val today = java.time.LocalDate.of(2026, 10, 17)
+    val order = com.daigan.record.data.model.Order(
+        id = "order-hosting",
+        accountId = "account-1",
+        type = com.daigan.record.data.model.OrderType.HOSTING,
+        title = "日常托管",
+        priceCents = null,
+        paymentMode = com.daigan.record.data.model.PaymentMode.ONE_TIME,
+        deadlineDate = null,
+        notes = null,
+        refresh = com.daigan.record.data.model.GameRefreshRulesDomain(
+            zoneId = java.time.ZoneId.of("Asia/Shanghai"),
+            dailyRefresh = java.time.LocalTime.of(4, 0),
+            weeklyRefreshDay = java.time.DayOfWeek.MONDAY,
+            weeklyRefreshTime = java.time.LocalTime.of(5, 0),
+        ),
+        createdAt = fixedInstant,
+        completedAt = null,
+    )
+    val period = com.daigan.record.data.model.HostingPeriod(
+        id = periodId,
+        orderId = order.id,
+        periodIndex = 0,
+        startDate = today.plusDays(startOffsetDays),
+        endDate = today.plusDays(endOffsetDays),
+        priceCents = 30000,
+        refresh = order.refresh,
+        createdAt = fixedInstant,
+        renewalOperationId = null,
+    )
+    val task = com.daigan.record.data.model.OrderTask(
+        id = "task-hosting",
+        orderId = order.id,
+        periodId = period.id,
+        title = "每日签到",
+        progressType = com.daigan.record.data.model.ProgressType.CHECKBOX,
+        startValue = java.math.BigDecimal.ZERO,
+        targetValue = java.math.BigDecimal.ONE,
+        currentValue = java.math.BigDecimal.ZERO,
+        unit = null,
+        recurrence = com.daigan.record.data.model.RecurrenceType.DAILY,
+        weekdays = emptySet(),
+        everyNDays = null,
+        sortOrder = 0,
+        completedAt = null,
+    )
+    return com.daigan.record.data.model.OrderDetail(
+        order = order,
+        owner = owner(),
+        account = account(),
+        tasks = listOf(task),
+        periods = listOf(period),
+        occurrences = emptyList(),
+        attachments = emptyList(),
+        today = today,
+        now = fixedInstant,
+    )
+}

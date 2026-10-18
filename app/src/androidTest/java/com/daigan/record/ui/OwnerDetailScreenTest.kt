@@ -2,7 +2,7 @@ package com.daigan.record.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -14,6 +14,7 @@ import com.daigan.record.feature.accounts.OwnerDetailContent
 import com.daigan.record.testing.account
 import com.daigan.record.testing.owner
 import com.daigan.record.testing.ownerDetail
+import com.daigan.record.testing.shortOrderSummary
 import com.daigan.record.ui.theme.DaiganRecordTheme
 import org.junit.Rule
 import org.junit.Test
@@ -31,11 +32,15 @@ class OwnerDetailScreenTest {
 
     private fun setDetailContent(
         detail: com.daigan.record.data.model.OwnerDetail = ownerDetail(),
+        ordersByAccount: Map<String, List<com.daigan.record.data.model.OrderSummary>> = emptyMap(),
+        onCreateOrder: (String) -> Unit = {},
+        onOpenOrder: (String) -> Unit = {},
     ) {
         composeTestRule.setContent {
             DaiganRecordTheme {
                 OwnerDetailContent(
                     detail = detail,
+                    ordersByAccount = ordersByAccount,
                     onBack = {},
                     onEditOwner = {},
                     onAddAccount = {},
@@ -45,6 +50,8 @@ class OwnerDetailScreenTest {
                     onRestoreOwner = {},
                     onArchiveAccount = {},
                     onRestoreAccount = {},
+                    onCreateOrder = onCreateOrder,
+                    onOpenOrder = onOpenOrder,
                 )
             }
         }
@@ -85,13 +92,27 @@ class OwnerDetailScreenTest {
     }
 
     @Test
-    fun orderEntryIsPresentButClearlyUnavailable() {
-        setDetailContent()
+    fun orderEntryBelongsToTheAccountAndOpensItsCreationFlow() {
+        var createdFor: String? = null
+        setDetailContent(onCreateOrder = { createdFor = it })
 
-        composeTestRule.onNodeWithText("为这个账号接新单").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("订单功能将在第二阶段提供，当前入口不可用。").assertExists()
-        composeTestRule.onNodeWithText("暂无订单").assertExists()
+        composeTestRule.onNodeWithText("为这个账号接新单").assertIsEnabled().performClick()
+        org.junit.Assert.assertEquals("account-1", createdFor)
+        composeTestRule.onNodeWithText("该账号暂无订单。").assertExists()
         composeTestRule.onNodeWithText("B001").assertExists()
+    }
+
+    @Test
+    fun accountListsItsOrdersAndTheyRemainOpenable() {
+        var opened: String? = null
+        setDetailContent(
+            ordersByAccount = mapOf("account-1" to listOf(shortOrderSummary())),
+            onOpenOrder = { opened = it },
+        )
+
+        composeTestRule.onNodeWithText("订单 · 1").assertExists()
+        composeTestRule.onNodeWithText("短期任务").performClick()
+        org.junit.Assert.assertEquals("order-1", opened)
     }
 
     @Test

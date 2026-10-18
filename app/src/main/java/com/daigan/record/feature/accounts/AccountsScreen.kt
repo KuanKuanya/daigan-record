@@ -138,7 +138,7 @@ private fun OwnerList(
                 EmptyStateCard(
                     title = "还没有老板资料",
                     description = "点击“新增”记录第一位老板，然后在老板详情中添加游戏账号。" +
-                        "订单只能在老板的游戏账号下创建，当前版本尚未提供订单功能。",
+                        "订单只能从具体游戏账号下创建，本页没有全局建单入口。",
                 )
             }
         }
@@ -147,8 +147,8 @@ private fun OwnerList(
         }
         item {
             Text(
-                text = "本版本只管理老板与游戏账号。订单、托管打卡、收款与统计将在后续阶段接入，" +
-                    "列表不会显示虚构的订单或收款状态。",
+                text = "订单与打卡归属于具体游戏账号；收款、统计、模板与提醒属于后续阶段，" +
+                    "本版本不会显示虚构的实收或余额。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

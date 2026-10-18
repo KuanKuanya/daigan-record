@@ -51,12 +51,14 @@ class ArchiveOwnershipRegressionTest {
             database = database,
             ownerDao = database.ownerDao(),
             accountDao = database.gameAccountDao(),
+            orderDao = database.orderDao(),
             timeProvider = clock,
         )
         accountRepository = DefaultGameAccountRepository(
             database = database,
             ownerDao = database.ownerDao(),
             accountDao = database.gameAccountDao(),
+            orderDao = database.orderDao(),
             timeProvider = clock,
         )
     }

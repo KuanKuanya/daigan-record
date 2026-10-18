@@ -59,9 +59,9 @@ class MigrationV1ToV2Test {
 
         helper.runMigrationsAndValidate(
             databaseName,
-            2,
+            RECORD_DATABASE_VERSION,
             true,
-            RecordDatabase.MIGRATION_1_2,
+            *RecordDatabase.ALL_MIGRATIONS,
         ).use { database ->
             database.query("SELECT COUNT(*) FROM owners").use { cursor ->
                 assertTrue(cursor.moveToFirst())
@@ -156,12 +156,14 @@ class MigrationV1ToV2Test {
                 database = database,
                 ownerDao = database.ownerDao(),
                 accountDao = database.gameAccountDao(),
+                orderDao = database.orderDao(),
                 timeProvider = clock,
             )
             val accountRepository = DefaultGameAccountRepository(
                 database = database,
                 ownerDao = database.ownerDao(),
                 accountDao = database.gameAccountDao(),
+                orderDao = database.orderDao(),
                 timeProvider = clock,
             )
 
@@ -227,6 +229,13 @@ class MigrationV1ToV2Test {
         assertTrue(versionTwo.contains("\"columnName\": \"archiveBatchId\""))
         assertTrue(versionTwo.contains("\"tableName\": \"owners\""))
         assertTrue(versionTwo.contains("\"tableName\": \"game_accounts\""))
+
+        val versionThree = assets.open("com.daigan.record.data.local.RecordDatabase/3.json")
+            .bufferedReader()
+            .use { it.readText() }
+        assertTrue(versionThree.contains("\"version\": 3"))
+        assertTrue(versionThree.contains("\"tableName\": \"orders\""))
+        assertTrue(versionThree.contains("\"tableName\": \"task_occurrences\""))
     }
 
     private fun insertLegacyFixture(database: androidx.sqlite.db.SupportSQLiteDatabase) {

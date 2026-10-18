@@ -27,6 +27,9 @@ import com.daigan.record.feature.accounts.AccountsScreen
 import com.daigan.record.feature.accounts.ArchivedRecordsScreen
 import com.daigan.record.feature.accounts.OwnerDetailScreen
 import com.daigan.record.feature.accounts.OwnerFormScreen
+import com.daigan.record.feature.orders.BackfillScreen
+import com.daigan.record.feature.orders.NewOrderScreen
+import com.daigan.record.feature.orders.OrderDetailScreen
 import com.daigan.record.feature.settings.PendingFeatureScreen
 import com.daigan.record.feature.settings.SettingsScreen
 import com.daigan.record.feature.stats.StatsScreen
@@ -72,7 +75,10 @@ fun DaiganRecordApp(navController: NavHostController = rememberNavController()) 
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Routes.TODAY) {
-                TodayScreen(onOpenSettings = { navController.navigate(Routes.SETTINGS) })
+                TodayScreen(
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                )
             }
             composable(Routes.ACCOUNTS) {
                 AccountsScreen(
@@ -108,15 +114,59 @@ fun DaiganRecordApp(navController: NavHostController = rememberNavController()) 
             composable(
                 route = Routes.OWNER_DETAIL,
                 arguments = listOf(navArgument(Routes.OWNER_ID_ARG) { type = NavType.StringType }),
-            ) {
+            ) { entry ->
+                val ownerId = entry.arguments?.getString(Routes.OWNER_ID_ARG).orEmpty()
                 OwnerDetailScreen(
                     onBack = { navController.popBackStack() },
-                    onEditOwner = { ownerId -> navController.navigate(Routes.ownerForm(ownerId)) },
-                    onAddAccount = { ownerId -> navController.navigate(Routes.accountForm(ownerId)) },
-                    onEditAccount = { ownerId, accountId ->
-                        navController.navigate(Routes.accountForm(ownerId, accountId))
+                    onEditOwner = { id -> navController.navigate(Routes.ownerForm(id)) },
+                    onAddAccount = { id -> navController.navigate(Routes.accountForm(id)) },
+                    onEditAccount = { id, accountId ->
+                        navController.navigate(Routes.accountForm(id, accountId))
+                    },
+                    onCreateOrder = { accountId ->
+                        navController.navigate(Routes.orderNew(ownerId, accountId))
+                    },
+                    onOpenOrder = { orderId ->
+                        navController.navigate(Routes.orderDetail(orderId))
                     },
                 )
+            }
+            composable(
+                route = Routes.ORDER_NEW,
+                arguments = listOf(
+                    navArgument(Routes.OWNER_ID_ARG) { type = NavType.StringType },
+                    navArgument(Routes.ACCOUNT_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                NewOrderScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { orderId ->
+                        navController.navigate(Routes.orderDetail(orderId)) {
+                            popUpTo(Routes.ORDER_NEW) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable(
+                route = Routes.ORDER_DETAIL,
+                arguments = listOf(navArgument(Routes.ORDER_ID_ARG) { type = NavType.StringType }),
+            ) { entry ->
+                val orderId = entry.arguments?.getString(Routes.ORDER_ID_ARG).orEmpty()
+                OrderDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onBackfill = { periodId ->
+                        navController.navigate(Routes.orderBackfill(orderId, periodId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.ORDER_BACKFILL,
+                arguments = listOf(
+                    navArgument(Routes.ORDER_ID_ARG) { type = NavType.StringType },
+                    navArgument(Routes.PERIOD_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                BackfillScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = Routes.OWNER_FORM,

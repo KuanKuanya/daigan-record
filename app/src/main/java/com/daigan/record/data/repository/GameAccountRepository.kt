@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.daigan.record.core.time.TimeProvider
 import com.daigan.record.data.local.RecordDatabase
 import com.daigan.record.data.local.dao.GameAccountDao
+import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
 import com.daigan.record.data.local.entity.GameAccountEntity
 import com.daigan.record.data.model.AccountDraft
@@ -56,6 +57,7 @@ class DefaultGameAccountRepository @Inject constructor(
     private val database: RecordDatabase,
     private val ownerDao: OwnerDao,
     private val accountDao: GameAccountDao,
+    private val orderDao: OrderDao,
     private val timeProvider: TimeProvider,
 ) : GameAccountRepository {
 
@@ -144,6 +146,14 @@ class DefaultGameAccountRepository @Inject constructor(
             requireActiveOwner(account.ownerId)
             // Idempotent: archiving twice keeps the original archive instant.
             if (account.archivedAt != null) return@withTransaction
+            require(orderDao.countUnfinishedShortOrdersForAccount(accountId) == 0) {
+                ARCHIVED_ACCOUNT_HAS_ACTIVE_WORK_MESSAGE
+            }
+            assertNoUnexpiredPeriod(
+                periods = orderDao.findHostingPeriodsForAccount(accountId),
+                now = now,
+                message = ARCHIVED_ACCOUNT_HAS_ACTIVE_WORK_MESSAGE,
+            )
             accountDao.archiveIndependently(accountId = accountId, archivedAt = now)
         }
     }

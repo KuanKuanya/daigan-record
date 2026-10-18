@@ -1,5 +1,6 @@
 package com.daigan.record.feature.today
 
+import com.daigan.record.testing.FakeOrderRepository
 import com.daigan.record.testing.FixedTimeProvider
 import com.daigan.record.testing.MainDispatcherRule
 import kotlinx.coroutines.flow.first
@@ -16,7 +17,7 @@ class TodayViewModelTest {
 
     @Test
     fun `defaults to the hosting tab with the injected date`() = runTest {
-        val viewModel = TodayViewModel(FixedTimeProvider())
+        val viewModel = TodayViewModel(FixedTimeProvider(), FakeOrderRepository())
 
         val state = viewModel.uiState.first()
 
@@ -26,7 +27,7 @@ class TodayViewModelTest {
 
     @Test
     fun `tab selection is reflected in the UI state`() = runTest {
-        val viewModel = TodayViewModel(FixedTimeProvider())
+        val viewModel = TodayViewModel(FixedTimeProvider(), FakeOrderRepository())
 
         viewModel.selectTab(TodayTab.SHORT_TASK)
 

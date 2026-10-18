@@ -18,6 +18,9 @@ interface GameAccountDao {
     @Query("SELECT * FROM game_accounts WHERE ownerId = :ownerId ORDER BY createdAt ASC, rowid ASC")
     fun observeForOwner(ownerId: String): Flow<List<GameAccountEntity>>
 
+    @Query("SELECT * FROM game_accounts WHERE id = :accountId")
+    fun observeById(accountId: String): Flow<GameAccountEntity?>
+
     @Query("SELECT * FROM game_accounts WHERE archivedAt IS NOT NULL ORDER BY updatedAt DESC, rowid ASC")
     fun observeArchived(): Flow<List<GameAccountEntity>>
 

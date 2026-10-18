@@ -1,164 +1,319 @@
-# 数据模型（Phase 1 实现 + 后续阶段关系设计）
+# 数据模型（Phase 1 + Phase 2 已实现）
 
-Room/SQLite 是业务资料唯一事实来源。本文件分两部分：已实现的第一阶段表结构，以及为后续阶段
-预留的关系设计。**后续阶段的表尚未创建**，不存在空表或推测性迁移。
+Room/SQLite 是业务资料唯一事实来源。本文件只描述**已经实现并经过迁移测试**的表；
+收款流水、游戏模板库、提醒与备份仍属于后续阶段，未创建空表，也没有占位实现。
 
-Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/1.json` 与
-`2.json`（`exportSchema = true`，提交到仓库；无 `fallbackToDestructiveMigration`）。
-`1.json` 是**只读的历史夹具**，不再修改；当前版本为 2。
+Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`。
 
-## 1. 已实现的表（数据库版本 2）
-
-类型转换器：`Instant ↔ Long`（epoch 毫秒，UTC）、`LoginMethod ↔ String`（枚举名）。
-
-版本 2 只比版本 1 多两列可空文本 `archiveBatchId`，其余表结构、索引、外键完全不变。
-
-### `owners` — 老板
-
-| 列 | 类型 | 约束 |
+| 版本 | 文件 | 状态 |
 |---|---|---|
-| `id` | TEXT | 主键，UUID 字符串 |
-| `number` | INTEGER | 非空，**唯一索引**，由序列分配，不可修改 |
-| `nickname` | TEXT | 非空，去掉首尾空白，1–30 字符 |
-| `createdAt` | INTEGER | 非空，`Instant` |
-| `updatedAt` | INTEGER | 非空，`Instant` |
-| `archivedAt` | INTEGER | 可空，`Instant`；非空表示已归档 |
-| `archiveBatchId` | TEXT | 可空；本次老板归档批次标识，激活状态下为 NULL |
+| 1 | `1.json` | **只读历史夹具**，不再修改 |
+| 2 | `2.json` | **只读历史夹具**，Phase 1 验收基线 |
+| 3 | `3.json` | 当前生产版本（Phase 2） |
 
-索引：`number`（唯一）、`archivedAt`。
+`exportSchema = true`，没有 `fallbackToDestructiveMigration`。生产构建通过
+`RecordDatabase.ALL_MIGRATIONS` 注册 `MIGRATION_1_2` 与 `MIGRATION_2_3`。
 
-### `game_accounts` — 游戏账号
+类型转换器：
+
+| Kotlin 类型 | SQLite 类型 | 说明 |
+|---|---|---|
+| `Instant` | INTEGER | epoch 毫秒（UTC）；所有“实际记录时间” |
+| `LocalDate` | TEXT | ISO-8601 `yyyy-MM-dd`；本地日期/游戏日期 |
+| `BigDecimal` | TEXT | `toPlainString()`，保留用户输入的精确小数 |
+| 枚举（订单类型/进度/周期/批次等） | TEXT | 枚举名 |
+| `Boolean` | INTEGER | 0/1 |
+
+金额一律为整数分（`priceCents`），不存在浮点金额。
+
+## 1. Phase 1 表（版本 2 起未再改动）
+
+### `owners`
 
 | 列 | 类型 | 约束 |
 |---|---|---|
 | `id` | TEXT | 主键，UUID |
-| `ownerId` | TEXT | 非空，外键 → `owners.id`，`ON DELETE RESTRICT`，`ON UPDATE CASCADE` |
-| `gameName` | TEXT | 非空（本阶段直接填写，第四阶段接入模板） |
-| `server` | TEXT | 非空（区服） |
-| `uid` | TEXT | 非空（游戏 UID，文本以保留前导零） |
-| `loginAccount` | TEXT | 非空 |
-| `loginMethod` | TEXT | 非空，`PASSWORD` / `VERIFICATION_CODE` |
-| `password` | TEXT | 可空；仅密码登录时非空，验证码登录必须为 NULL |
+| `number` | INTEGER | 非空，唯一索引，不可修改 |
+| `nickname` | TEXT | 非空，1–30 字符 |
+| `createdAt` / `updatedAt` | INTEGER | 非空 |
+| `archivedAt` | INTEGER | 可空；非空表示已归档 |
+| `archiveBatchId` | TEXT | 可空；老板归档批次 |
+
+### `game_accounts`
+
+| 列 | 类型 | 约束 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `ownerId` | TEXT | → `owners.id`，`ON DELETE RESTRICT` |
+| `gameName` / `server` / `uid` / `loginAccount` | TEXT | 非空 |
+| `loginMethod` | TEXT | `PASSWORD` / `VERIFICATION_CODE` |
+| `password` | TEXT | 可空；验证码登录必须为 NULL |
 | `createdAt` / `updatedAt` | INTEGER | 非空 |
 | `archivedAt` | INTEGER | 可空 |
-| `archiveBatchId` | TEXT | 可空；仅当账号随老板归档时写入，恢复时清空 |
+| `archiveBatchId` | TEXT | 可空；仅随老板归档时写入 |
 
-索引：`ownerId`；`(ownerId, archivedAt)`。插入顺序通过 SQLite `rowid` 作为次级排序键保持稳定。
+### `owner_number_sequence`
 
-### `owner_number_sequence` — 老板编号序列
+单行计数器（`id = 0`），编号在同一事务中 `UPDATE → SELECT → INSERT` 分配；
+`owners.number` 唯一索引是并发最后防线。归档不归还编号。
 
-单行计数器（`id = 0`，`nextNumber` 从 1 开始），保证编号单调、不复用、跨进程重启有效。
+### 归档不变量（Phase 2 仍然有效）
 
-### 关键不变量与实现方式
+- 老板归档：同一事务内生成 `archiveBatchId`，老板与当时未归档的账号共享批次。
+- 老板恢复：只恢复批次相同的账号；独立归档账号保持归档。
+- 独立归档账号：`archiveBatchId` 保持 NULL。
+- 重复归档/恢复幂等，不重写时间戳或批次。
+- 老板归档期间，其账号写入一律在同一事务中拒绝。
 
-1. **编号分配事务安全**：`createOwner` 在单个 `withTransaction` 中依次执行
-   `INSERT OR IGNORE`（初始化序列）→ `UPDATE nextNumber = nextNumber + 1`（获取写锁）→
-   `SELECT nextNumber - 1` → `INSERT owners`。并发事务被 SQLite 串行化，随后读取不会看到同一个值；
-   `owners.number` 的唯一索引是最后防线，违反时最多重试 3 次（事务整体回滚，不会重复占用编号）。
-2. **昵称可改、编号不变**：`renameOwner` 只更新 `nickname`/`updatedAt`，UI 不提供编号编辑。
-3. **外键强制**：外键声明 + Room 默认开启 `foreign_keys`；删除仍有账号的老板被 RESTRICT 拒绝。
-   Phase 1 没有删除入口，只有归档。
-4. **凭据规则**：仓储层统一归一化：验证码登录时 `password` 写为 NULL；切回密码登录而未填写密码会被校验拒绝。
-   验证码本身从不写入任何表。凭据不写日志、不进入报告或分析。
-5. **归档语义（显式批次，不依赖时间戳）**：
-   - 归档老板：同一事务内生成新的 `archiveBatchId`（UUID），写入老板行，并把老板当前未归档的账号
-     归档为同一批次（`archivedAt` 与 `archiveBatchId` 同时写入）。**已归档账号不参与**，其归档来源不变。
-   - 恢复老板：只恢复 `archiveBatchId` 等于老板自身批次的账号（并清空两处批次列），
-     因此此前单独归档的账号即使与老板归档发生在同一毫秒也不会被误恢复。
-   - 单独归档账号：写 `archivedAt` 且 **`archiveBatchId` 保持 NULL**，不冒充老板批次。
-   - 单独恢复账号：清空 `archivedAt` 与 `archiveBatchId`；仅在老板未归档时允许。
-   - 重复归档/恢复：均为幂等空操作，不会重新写入时间戳或覆盖已有批次。
-   - 老板归档期间：新增、编辑、单独归档、单独恢复其账号一律在**同一写事务内**拒绝并整体回滚，
-     返回可理解的失败信息；只允许查看，或恢复老板本身。老板恢复后可在归档记录/详情中逐个恢复账号。
-   - 归档记录页分别列出“已归档老板”（文案只声明总数与其中随老板归档的账号数）与
-     “已归档账号”（所属老板仍在用）。
-6. **排序**：老板按 `number` 升序；账号按 `createdAt`、`rowid` 升序；归档账号按 `updatedAt` 降序。
-7. **迁移策略**：任何表结构变化都必须提升版本并提供 `Migration`，用 `MigrationTestHelper`
-   针对提交的历史 schema 测试，并保留旧版本 JSON 不动。
-   `MIGRATION_1_2` 只执行两条 `ALTER TABLE ... ADD COLUMN archiveBatchId TEXT`，
-   已有行全部保持 NULL，不做数据重写。生产构建通过 `RecordDatabase.ALL_MIGRATIONS` 注册迁移，
-   没有 `fallbackToDestructiveMigration`。测试见 `MigrationV1ToV2Test` 与 `MigrationInfrastructureTest`。
+Phase 2 新增的**归档守卫**（见第 4 节）在归档老板/账号时要求没有未完成短期单，
+且没有未到期托管期。
 
-### 旧版本（v1）数据的归档来源策略
+## 2. Phase 2 表（数据库版本 3）
 
-v1 只有 `archivedAt`，无法区分“随老板归档”和“同一毫秒独立归档”，因此**不声称可以还原**：
+### `orders` — 订单
 
-- 迁移后所有 v1 行的 `archiveBatchId` 为 NULL，不根据时间戳相等去猜测归属。
-- 恢复一个 v1 遗留的已归档老板时，只恢复老板本身；其账号**全部保持归档**且仍可查看，
-  不会被自动恢复（宁可少恢复，也不误恢复）。
-- 这些账号在老板恢复后仍出现在老板详情与归档记录中，可**逐个手动恢复**，也可以重新归档老板
-  以建立新的明确批次。
-- UI 文案只声明已知事实（总数、其中随老板归档的数量），不会把来源不明的账号描述为“随老板归档”。
+| 列 | 类型 | 约束 / 语义 |
+|---|---|---|
+| `id` | TEXT | 主键；**续期不变** |
+| `accountId` | TEXT | → `game_accounts.id`，`ON DELETE RESTRICT`，索引 |
+| `type` | TEXT | `SHORT_TASK` / `HOSTING` |
+| `title` | TEXT | 非空 |
+| `priceCents` | INTEGER | 短期单整单总价；托管单为 NULL（价格属于期次） |
+| `paymentMode` | TEXT | `ONE_TIME` / `INSTALLMENTS`；仅记录选择，不产生收款 |
+| `deadlineDate` | TEXT | 可空；短期单交付期限（按订单游戏日判断逾期） |
+| `notes` | TEXT | 可空 |
+| `gameZoneId` | TEXT | 显式时区，例如 `Asia/Shanghai` |
+| `dailyRefreshMinutes` | INTEGER | 每日刷新，距零点分钟 |
+| `weeklyRefreshDay` | INTEGER | ISO 1–7（周一=1） |
+| `weeklyRefreshMinutes` | INTEGER | 每周刷新，距零点分钟 |
+| `createdAt` / `updatedAt` | INTEGER | 非空 |
+| `completedAt` | INTEGER | 短期单全部任务完成时非空；重新打开任务时清空 |
 
-## 2. 后续阶段关系设计（未实现）
+索引：`accountId`、`(accountId, type)`、`(type, completedAt)`。
+一个账号可以同时拥有多张短期单和多张托管单。
 
-以下仅作为接口与约束约定，供第二阶段起按实际需求落地；不创建空表。
+### `hosting_periods` — 托管期次
 
+| 列 | 类型 | 约束 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `orderId` | TEXT | → `orders.id`，`RESTRICT` |
+| `periodIndex` | INTEGER | 从 0 开始，续期递增 |
+| `startDate` / `endDate` | TEXT | 游戏时区日期，**首尾均含** |
+| `priceCents` | INTEGER | 本期约定价格（整数分） |
+| `gameZoneId` / `dailyRefreshMinutes` / `weeklyRefreshDay` / `weeklyRefreshMinutes` | | 本期规则快照，续期后不改写旧期 |
+| `createdAt` | INTEGER | 非空 |
+| `renewalOperationId` | TEXT | 可空；唯一索引；续期幂等 |
+
+唯一索引：`(orderId, periodIndex)`、`(orderId, startDate)`、`renewalOperationId`。
+
+### `task_definitions` — 任务配置快照
+
+短期单任务 `periodId = NULL`；托管任务全部挂在具体期次下。
+
+| 列 | 类型 | 语义 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `orderId` | TEXT | → `orders.id`，`RESTRICT` |
+| `periodId` | TEXT | 可空，→ `hosting_periods.id`，`RESTRICT` |
+| `title` | TEXT | 非空 |
+| `progressType` | TEXT | `CHECKBOX` / `NUMERIC` |
+| `startValue` / `targetValue` / `currentValue` | TEXT | 精确十进制；短期单当前值持久化 |
+| `unit` | TEXT | 可空 |
+| `recurrence` | TEXT | `DAILY` / `WEEKLY` / `SELECTED_WEEKDAYS` / `EVERY_N_DAYS` |
+| `weekdays` | TEXT | 可空；ISO 星期号逗号分隔，如 `1,3,5` |
+| `everyNDays` | INTEGER | 可空；N≥1，**以本期间开始日为锚点** |
+| `sortOrder` | INTEGER | 表单顺序 |
+| `completedAt` | INTEGER | 短期单任务完成时间；托管任务恒为 NULL |
+| `completionBatchId` | TEXT | 可空；短期批量完成所属批次 |
+| `createdAt` / `updatedAt` | INTEGER | 非空 |
+
+### `task_occurrences` — 托管打卡发生记录
+
+| 列 | 类型 | 语义 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `taskDefinitionId` | TEXT | → `task_definitions.id`，`RESTRICT` |
+| `occurrenceKey` | TEXT | 稳定键，见第 3 节 |
+| `gameDate` | TEXT | 归属游戏日期；周任务为窗口起始日 |
+| `windowStart` / `windowEnd` | TEXT | 可空；周任务窗口（已按托管期裁剪） |
+| `completedAt` | INTEGER | 可空；实际完成/记录时刻 |
+| `recordedAt` | INTEGER | 可空；实际录入时刻（补录时与历史日期不同） |
+| `backfilled` | INTEGER | 非空；该次记录属于历史补录 |
+| `completionBatchId` | TEXT | 可空；批量完成所属批次 |
+| `value` | TEXT | 可空；数值进度 |
+| `createdAt` | INTEGER | 非空 |
+
+**唯一索引 `(taskDefinitionId, occurrenceKey)`** 是重复生成与重复点击的最终防线。
+索引：`taskDefinitionId`、`gameDate`、`completionBatchId`。
+
+### `completion_batches` / `completion_batch_items` — 批量完成审计
+
+`completion_batches`：`id`、`operationId`（唯一）、`scope`
+（`HOSTING_ORDER` / `HOSTING_ALL` / `SHORT_ORDER`）、`targetId`、`gameDate`、
+`createdAt`、`undoneAt`。
+
+`completion_batch_items` 保存每项的**应用前**与**应用后**状态：
+
+- 归属：`occurrenceId` 或 `taskDefinitionId`（二者择一）。
+- 前值：`previousCompletedAt`、`previousRecordedAt`、`previousBackfilled`、
+  `previousValue`、`previousCompletionBatchId`。
+- 后值：`appliedCompletedAt`、`appliedRecordedAt`、`appliedBackfilled`、
+  `appliedValue`、`appliedCompletionBatchId`。
+
+撤销只回滚本批次实际改动的项；若当前行不再等于 `applied*`（后续独立编辑），
+该项记为冲突并保留最新结果，不会覆盖。
+
+### `attachments` — 截图引用
+
+| 列 | 类型 | 语义 |
+|---|---|---|
+| `id` | TEXT | 稳定附件 ID |
+| `taskDefinitionId` | TEXT | 可空；短期任务截图 |
+| `occurrenceId` | TEXT | 可空；托管打卡截图 |
+| `relativePath` | TEXT | 应用私有目录 `files/attachments/` 下的文件名 |
+| `mimeType` | TEXT | 非空 |
+| `sizeBytes` | INTEGER | 非空 |
+| `createdAt` | INTEGER | 非空 |
+
+`taskDefinitionId` 与 `occurrenceId` 必须恰好一个非空（仓储层校验）。
+外键均 `RESTRICT`。数据库不保存 Base64，也不保存外部 URI。
+
+## 3. 日期与周期语义（实现于 `core/time/GameCalendar.kt`、`data/model/OccurrenceRules.kt`）
+
+三个概念严格区分：
+
+1. **本地日历日期**：存储时区中的民用日期。日期选择器使用它。
+2. **游戏日期**：以“每日刷新时间”为起点的一天。若当前本地时间早于每日刷新，
+   游戏日期为前一天。每日、指定星期、每隔 N 天任务都归属游戏日期。
+3. **每周发生窗口**：`[配置星期 + 配置时间的刷新时刻, +7 天)`。周任务每个窗口
+   恰好一条发生记录；窗口可跨多个游戏日，但不会按天复制。窗口展示日期为起始日
+   与起始日 + 6 天；实际起止时刻用于判断可执行性。
+
+发生键（`taskDefinitionId` 已按期次隔离，因此全局唯一索引只做最后防线）：
+
+| 周期 | 键格式 | 归属日期 |
+|---|---|---|
+| 每日 | `D:<gameDate>` | 当天游戏日 |
+| 指定星期 | `S:<gameDate>` | 当天游戏日 |
+| 每隔 N 天 | `E:<gameDate>` | 从期次 `startDate` 起第 `k*N` 天 |
+| 每周 | `W:<windowStartLocalDate>` | 窗口起始日（展示时裁剪到托管期） |
+
+- 所有任务只在 `[startDate, endDate]` 内存在；未来开始日不生成工作；到期日之后
+  不再生成新任务。
+- 周任务窗口与托管期只部分重叠时仍保留一条发生记录，但键使用**未裁剪**的窗口起始日，
+  因此同一窗口在期次两端保持稳定；`windowStart`/`windowEnd` 存展示用裁剪值。
+- 历史补录按所选游戏日期定位周窗口；同一周内选择任意日期都指向同一条记录。
+  若周刷新时刻落在游戏日中间，补录以该游戏日开始后 12 小时的时刻判定窗口，
+  这是 Phase 2 的明确规则；真实游戏模板（Phase 4）若需要更细规则必须新增强制迁移。
+
+**续期与每日刷新**：续期开始日 = 操作时刻在**该期存储时区**中的游戏日期。
+
+- 刷新前续期：游戏日期仍是前一天，新期从该游戏日开始，当天剩余窗口即可打卡。
+- 刷新后续期：新期从当天游戏日开始。
+- 任何情况下都只生成 `startDate` 及之后的发生记录，不会回溯到旧期或新期开始日前。
+
+## 4. 仓储接口与事务边界
+
+```kotlin
+interface OrderRepository {
+    fun observeOrdersForOwner(ownerId: String): Flow<List<OrderSummary>>
+    fun observeOrderDetail(orderId: String): Flow<OrderDetail?>
+    fun observeTodayHosting(): Flow<List<TodayHostingOrder>>
+    fun observeTodayShort(): Flow<List<ShortWorkOrder>>
+
+    suspend fun createShortOrder(draft: ShortOrderDraft): String
+    suspend fun createHostingOrder(draft: HostingOrderDraft): String
+
+    suspend fun setShortTaskCompleted(taskId: String, completed: Boolean)
+    suspend fun updateShortTaskProgress(taskId: String, value: BigDecimal)
+    suspend fun completeShortOrder(orderId: String, operationId: String): BulkCompletionResult
+
+    suspend fun setOccurrenceCompleted(taskId: String, completed: Boolean)
+    suspend fun updateOccurrenceProgress(taskId: String, value: BigDecimal)
+    suspend fun completeHostingOrder(orderId: String, operationId: String): BulkCompletionResult
+    suspend fun completeAllHosting(operationId: String): BulkCompletionResult
+    suspend fun undoBatch(batchId: String): UndoResult
+
+    suspend fun setHistoricalCompletion(
+        orderId: String, periodId: String, taskId: String,
+        date: LocalDate, completed: Boolean,
+    ): Boolean
+
+    suspend fun renewHosting(
+        orderId: String, operationId: String,
+        durationDays: Int, priceCents: Long,
+    ): RenewalResult
+}
+
+interface AttachmentRepository {
+    fun observeForOrder(orderId: String): Flow<List<Attachment>>
+    suspend fun addAttachment(taskDefinitionId: String?, occurrenceId: String?, sourceUri: Uri): Attachment
+    suspend fun replaceAttachment(attachmentId: String, sourceUri: Uri): Attachment
+    suspend fun deleteAttachment(attachmentId: String)
+    fun fileFor(attachment: Attachment): File
+    suspend fun cleanupOrphans(): Int
+}
 ```
-owners 1 ── n game_accounts
-game_accounts 1 ── n orders
-orders 1 ── n hosting_periods
-hosting_periods 1 ── n task_definitions (快照)
-task_definitions 1 ── n task_occurrences
-orders 1 ── n receipts            (hosting_period_id 可空)
-task_occurrences 1 ── n attachments
-receipts 1 ── n attachments (可选)
-game_templates 1 ── n template_tasks (模板库，非订单快照)
-```
 
-建议字段与约束（第二阶段起实现时补充精确 DDL）：
+所有写操作在 `database.withTransaction` 中完成，并在事务内重新读取并校验：
 
-- `orders`
-  - `id` TEXT 主键（续期不改变订单 ID）
-  - `accountId` → `game_accounts.id`（RESTRICT），索引
-  - `type`：`HOSTING` / `SHORT_TASK`
-  - `title`、`priceCents`（整数分）、`paymentMode`、`createdAt`、`archivedAt`/`closedAt`
-  - 订单保存创建时的配置快照（时区、刷新规则、任务列表），模板后续修改不得回写历史订单。
-- `hosting_periods`
-  - `id`、`orderId` → `orders.id`（RESTRICT）、`startDate`/`endDate`（游戏时区的 `LocalDate`，存
-    ISO 文本或 epochDay）、`priceCents`、`periodIndex`
-  - 唯一约束建议 `(orderId, periodIndex)` 与 `(orderId, startDate)`，避免重复续期。
-- `task_definitions`（订单期次内的任务配置快照）
-  - `id`、`periodId` → `hosting_periods.id`、`title`、`progressType`（CHECKBOX / NUMERIC）、
-    `startValue`、`targetValue`、`unit`、`recurrence`、`weekdays`、`everyNDays`
-  - 数值使用整数或定点，不使用浮点累计。
-- `task_occurrences`
-  - `id`、`taskDefinitionId`、`gameDate`（ISO 日期）、`completedAt`（可空 `Instant`）、
-    `recordedAt`（补录时间）、`backfilled` 标记、`completionBatchId` 可空
-  - **唯一约束** `(taskDefinitionId, gameDate)`，保证幂等与重复点击安全。
-  - 撤销批次只回滚该批次改变的项，不能覆盖此前已完成项。
-- `receipts`
-  - `id`、`orderId`、`periodId`（可空，短期单为空）、`amountCents`、`receivedAt`（实际收款时刻）、
-    `channel`（微信 / 支付宝 / 其他）、`note`、`operationId`（唯一，防重复提交）、`createdAt`
-  - 金额只存整数分；欠款由“期次价格 − 实收”计算，不额外持久化页面余额。
-- `attachments`
-  - `id`、`ownerType`（任务发生记录 / 收款 / 打卡）、`ownerId`、`relativePath`（应用私有目录）、
-    `mimeType`、`sizeBytes`、`checksum`、`createdAt`
-  - 先落地文件再提交引用；失败清理临时文件；删除先改引用，延后清理无引用文件。
-  - 不把图片 Base64 写入数据库。
-- `game_templates` / `template_tasks`
-  - `id`、`name`、`templateVersion`、`gameVersionNote`、`timeZone`、`dailyRefresh`、`weeklyRefresh`、
-    分类与任务选项、默认进度方式与单位、默认周期
-  - 导入导出使用版本化 UTF-8 JSON；模板更新不得改写订单快照。
+- 账号存在且属于给定老板（建单时同时校验 `ownerId` 与 `account.ownerId`）。
+- 老板与账号均未归档；归档状态下返回
+  `ARCHIVED_OWNER_ORDER_MESSAGE` / `ARCHIVED_ACCOUNT_ORDER_MESSAGE`
+  或工作写入专用提示。
+- 托管任务的期次属于该订单；补录任务属于该期次。
 
-通用约定：
+**归档守卫**（同一事务）：
 
-- 主键统一 UUID 字符串；金额统一整数分；事件时刻统一 `Instant`；游戏日期统一 `LocalDate`；
-  游戏时区显式保存，不使用手机零点。
-- 归属用显式外键 + 索引；禁止级联删除业务记录（`RESTRICT`），以归档/作废代替删除。
-- 所有跨表写入（建单+首笔收款、续期、批量完成/撤销、收款归属）在单个事务中完成，
-  并用操作 ID / 唯一索引防止重复。
-- 设置类偏好：仅显示偏好可放 DataStore；影响业务与提醒的配置放 Room，避免跨存储版本不一致。
+- 老板有未完成短期单 → 拒绝归档老板。
+- 老板名下最新期次未到期（`游戏日 ≤ endDate`，含未来开始）→ 拒绝归档老板。
+- 账号同理，提示改为“游戏账号”。
+- 已完成短期单或已到期托管期不阻止归档；归档后订单、期次、发生记录、截图仍可读。
 
-## 3. 测试覆盖（真实 Room）
+**批量完成/撤销**：
 
-- `RecordDatabaseTest`：外键拒绝、编号唯一索引、RESTRICT 阻止删除、关闭/重开数据库后数据仍在、归档查询、序列递增。
-- `OwnerRepositoryTest`：20 个并发创建得到唯一连续编号、改昵称不改编号、同老板多账号、跨老板账号隔离、
-  密码→验证码清除密码、归档/恢复、编号不复用、账号必须属于存在的老板。
-- `ArchiveOwnershipRegressionTest`（真实 Room）：同一毫秒内“独立归档 + 老板归档”后恢复老板只恢复批次内账号；
-  独立归档账号保留在归档列表；重复归档/恢复幂等且不覆盖批次；连续多轮归档/恢复；老板归档期间所有账号写入被拒
-  且库内数据逐字段不变；老板恢复后可单独恢复。
-- `MigrationV1ToV2Test`：以提交的 `1.json` 建立 v1 库并写入真实行（含同一毫秒的歧义归档），
-  执行 `MIGRATION_1_2` 后校验老板、编号、账号、凭据、归档时间全部保留、批次列为 NULL；
-  用生产同款 `Room.databaseBuilder` + `ALL_MIGRATIONS` 打开旧库，验证旧数据恢复策略。
-- `MigrationInfrastructureTest`：历史夹具创建 + 升级到当前版本 + schema 与数据校验；每个已导出 schema 资源存在。
+- 批量只处理当前游戏日/当前周窗口内可执行且尚未完成的发生记录，绝不补历史。
+- 同一 `operationId` 重放返回同一批次与 `alreadyApplied = true`；不会重复写入。
+- 撤销在单事务内逐项比对 `applied*`；冲突项保留最新结果并在 `UndoResult.conflicts`
+  中说明。撤销同样受归档写入守卫约束。
+- 撤销不触碰批次之外此前已完成的项。
+
+**续期**：
+
+- 只允许 `当前游戏日 > 当前期 endDate`；否则拒绝提前续期。
+- 新期 `periodIndex = 旧期 + 1`，`startDate = 当前游戏日`，`endDate = start + 天数 - 1`。
+- `renewalOperationId` 唯一；重复提交返回既有期次。
+- 从旧期任务复制为**新 ID** 的任务快照，完成状态与当前值重置，旧期数据不动。
+- 订单数量不增加，订单 ID 不变；旧期价格保留但不声称已收款。
+
+## 5. 截图文件与失败处理
+
+- 来源：`ActivityResultContracts.PickVisualMedia`（系统照片选择器），不申请宽泛存储权限。
+- 流程：读取 `contentResolver` → 写入 `files/attachments/<uuid>.tmp` → 移动/复制为
+  `files/attachments/<uuid>.<ext>` → 在数据库事务中插入引用。数据库失败则删除新文件。
+- 替换：先生成新文件，再在同一事务中插入新行并删除旧行；任一步失败则删除新文件，
+  旧行与旧文件保持不变。成功后旧文件才删除。
+- 删除：先删除数据库引用，事务提交后再删除文件；失败遗留文件由
+  `cleanupOrphans()` 清理（应用启动时调用）。
+- 取消选择（`null` URI）或来源不可读：不写任何行，不产生“成功但损坏”的附件。
+- 清理只删除未被引用的最终文件与超过 1 小时的临时文件。
+
+## 6. 迁移与测试
+
+- `MIGRATION_1_2`：两条 `ALTER TABLE ... ADD COLUMN archiveBatchId TEXT`，不重写数据。
+- `MIGRATION_2_3`：创建 7 张 Phase 2 表、全部显式命名索引与外键；不修改任何旧行。
+- `MigrationV1ToV2Test`：用提交的 `1.json` 建 v1 库，写入真实行，执行全部迁移到当前
+  版本；编号、凭据、归档时间保留，批次列为 NULL；生产同款 builder 打开旧库。
+- `MigrationV2ToV3Test`：用提交的 `2.json` 建 v2 库，含显式 `archiveBatchId`；升级后
+  旧行逐字段保留，新表为空；新外键 `RESTRICT` 生效。
+- `MigrationInfrastructureTest`：遍历 1..当前版本的所有导出 schema，升级并校验数据。
+- 真实 Room 测试见 `OrderRepositoryTest`、`HostingOccurrenceTest`、
+  `BatchCompletionTest`、`RenewalTest`、`AttachmentTest`。
+
+## 7. 尚未实现（不是本阶段的隐含承诺）
+
+- 收款流水、欠款、实收统计与期次归属选择（Phase 3）。本阶段只保存约定价格/收款方式，
+  没有 `receipts` 表，也不会把旧期次标记为已收。
+- 游戏模板库、模板编辑/导入导出（Phase 4）。当前刷新规则是用户自填的临时值。
+- 系统通知/提醒、备份与恢复、加密、应用锁（后续阶段/产品明确不需要）。
