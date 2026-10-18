@@ -23,6 +23,17 @@ interface OccurrenceDao {
     )
     fun observeForOrder(orderId: String): Flow<List<TaskOccurrenceEntity>>
 
+    /** Same rows and order as [observeForOrder], for one consistent detail read. */
+    @Query(
+        """
+        SELECT occ.* FROM task_occurrences occ
+        INNER JOIN task_definitions t ON t.id = occ.taskDefinitionId
+        WHERE t.orderId = :orderId
+        ORDER BY occ.gameDate DESC, occ.recordedAt DESC
+        """
+    )
+    suspend fun findForOrder(orderId: String): List<TaskOccurrenceEntity>
+
     @Query(
         """
         SELECT occ.* FROM task_occurrences occ

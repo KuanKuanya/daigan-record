@@ -70,6 +70,17 @@ interface ReceiptDao {
     )
     fun observeCorrectionsForOrder(orderId: String): Flow<List<ReceiptCorrectionEntity>>
 
+    /** Same rows and order as [observeCorrectionsForOrder], for one consistent read. */
+    @Query(
+        """
+        SELECT c.* FROM receipt_corrections c
+        INNER JOIN receipts r ON r.id = c.receiptId
+        WHERE r.orderId = :orderId
+        ORDER BY c.createdAt DESC, c.id ASC
+        """
+    )
+    suspend fun findCorrectionsForOrder(orderId: String): List<ReceiptCorrectionEntity>
+
     @Query("SELECT * FROM receipt_corrections ORDER BY createdAt DESC, id ASC")
     suspend fun findAllCorrections(): List<ReceiptCorrectionEntity>
 

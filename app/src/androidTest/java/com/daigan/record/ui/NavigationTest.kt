@@ -47,9 +47,16 @@ class NavigationTest {
 
     @Test
     fun switchingToShortTaskTabShowsItsOwnEmptyState() {
+        // The list is backed by asynchronous database flows: before the first snapshot
+        // the tab content is a loading indicator. Wait for the condition instead of
+        // assuming the snapshot arrived in the same frame as the click.
+        waitForText("还没有托管打卡")
         composeTestRule.onNodeWithText("短期任务").performClick()
 
+        waitForText("还没有短期任务")
         composeTestRule.onNodeWithText("还没有短期任务").assertExists()
+        // The other tab's content must not be shown at the same time.
+        composeTestRule.onAllNodesWithText("还没有托管打卡").assertCountEquals(0)
     }
 
     @Test
@@ -133,6 +140,16 @@ class NavigationTest {
 
     private fun openAccounts() {
         composeTestRule.onNode(bottomNav("账号信息")).performClick()
+    }
+
+    /**
+     * Condition-based readiness: the Today lists only exist after the first database
+     * snapshot, so asserting immediately after a tap races the flow collection.
+     */
+    private fun waitForText(text: String) {
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     /** Bottom navigation items are the only clickable nodes that carry these labels. */

@@ -31,9 +31,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.util.UUID
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -67,9 +65,22 @@ data class NewOrderUiState(
     val formErrors: Map<String, String> = emptyMap(),
     val saveError: String? = null,
     val saving: Boolean = false,
+    /**
+     * The order this form instance committed. Non-null is a terminal successful state:
+     * the form itself is already an order, so another tap on it is not a new order
+     * intent. It is persisted and only cleared by [NewOrderViewModel.startNewCreation].
+     */
+    val createdOrderId: String? = null,
+    /**
+     * True while the committed result has not been handed to the navigation host yet.
+     * State (not a replay-zero event), so a collector that attaches or reattaches after
+     * completion still observes the destination; acknowledging it stops replays.
+     */
+    val createdNavigationPending: Boolean = false,
 ) {
     val errorMessages: List<String> get() = formErrors.values.distinct()
     val isShort: Boolean get() = type == OrderType.SHORT_TASK
+    val isCreated: Boolean get() = createdOrderId != null
 
     val priceCentsOrNull: Long? get() = Money.parseYuanToCentsOrNull(priceYuan)
     val initialCentsOrNull: Long? get() = Money.parsePositiveYuanToCentsOrNull(initialAmountYuan)
@@ -115,9 +126,6 @@ class NewOrderViewModel @Inject constructor(
     )
     val uiState: StateFlow<NewOrderUiState> = _uiState.asStateFlow()
 
-    private val _createdOrderId = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val createdOrderId: SharedFlow<String> = _createdOrderId
-
     init {
         restorePendingCommand()
         viewModelScope.launch {
@@ -148,6 +156,7 @@ class NewOrderViewModel @Inject constructor(
      * this, a retry after restoration could not be recognized as the same command.
      */
     private fun restorePendingCommand() {
+        restoreCommittedCreation()
         val restored = savedStateHandle.get<String>(KEY_PENDING_COMMAND)
             ?.let(PendingOrderCommandCodec::decode)
             ?: return
@@ -175,6 +184,23 @@ class NewOrderViewModel @Inject constructor(
                 initialChannel = form.initialChannel,
                 initialNote = form.initialNote,
                 initialReceivedAtMillis = restored.initialReceivedAtMillis,
+            )
+        }
+    }
+
+    /**
+     * A restored form that already committed an order must not look like an empty form:
+     * keeping the result in state lets the screen reopen the original destination and
+     * prevents a second create command from the restored instance.
+     */
+    private fun restoreCommittedCreation() {
+        val createdOrderId = savedStateHandle.get<String>(KEY_CREATED_ORDER_ID) ?: return
+        val pending = savedStateHandle.get<Boolean>(KEY_CREATED_NAVIGATION_PENDING) ?: true
+        _uiState.update {
+            it.copy(
+                createdOrderId = createdOrderId,
+                createdNavigationPending = pending,
+                saving = false,
             )
         }
     }
@@ -287,10 +313,14 @@ class NewOrderViewModel @Inject constructor(
      * the initial-receipt id, the actual receipt time and the exact form payload are
      * kept in [SavedStateHandle]; a retry after process restoration is the same
      * command. Only an edited payload (explicit new command) gets new identities.
+     *
+     * A committed creation is terminal for this form instance: the committed order id
+     * stays in state until navigation is acknowledged or [startNewCreation] is called,
+     * so a repeated tap on the visible successful form never allocates new ids.
      */
     fun submit() {
-        if (_uiState.value.saving) return
         val state = _uiState.value
+        if (state.isCreated || state.saving) return
         if (state.loadError != null) {
             _uiState.update { it.copy(saveError = state.loadError) }
             return
@@ -350,18 +380,18 @@ class NewOrderViewModel @Inject constructor(
                     else -> error("未知订单类型")
                 }
             }.onSuccess { orderId ->
-                // The command is complete: the next tap is a new command.
-                savedStateHandle.remove<String>(KEY_PENDING_FINGERPRINT)
-                savedStateHandle.remove<String>(KEY_PENDING_COMMAND)
-                savedStateHandle[KEY_CREATION_OPERATION] = UUID.randomUUID().toString()
-                savedStateHandle[KEY_INITIAL_PAYMENT_OPERATION] = UUID.randomUUID().toString()
+                // Committed. Keep the order id, the operation ids, the fingerprint, the
+                // exact submitted receipt time and the payload: this form instance is
+                // now terminal, and a repeated tap must not become another order.
+                savedStateHandle[KEY_CREATED_ORDER_ID] = orderId
+                savedStateHandle[KEY_CREATED_NAVIGATION_PENDING] = true
                 _uiState.update {
                     it.copy(
                         saving = false,
-                        initialReceivedAtMillis = timeProvider.now().toEpochMilli(),
+                        createdOrderId = orderId,
+                        createdNavigationPending = true,
                     )
                 }
-                _createdOrderId.emit(orderId)
             }.onFailure { error ->
                 // Keep the identities and payload so a retry is the same command.
                 _uiState.update {
@@ -371,6 +401,43 @@ class NewOrderViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * The navigation host has taken the committed result. The form stays terminal and
+     * keeps its order id; only the navigation signal stops, so a configuration change
+     * or a recomposition cannot navigate to the same order twice.
+     */
+    fun acknowledgeCreatedNavigation(orderId: String) {
+        val current = _uiState.value
+        if (current.createdOrderId != orderId || !current.createdNavigationPending) return
+        savedStateHandle[KEY_CREATED_NAVIGATION_PENDING] = false
+        _uiState.update { it.copy(createdNavigationPending = false) }
+    }
+
+    /**
+     * The only way out of the terminal successful state. Called from an explicit user
+     * action ("再建一张"), it drops the committed identity, forgets the completed
+     * command and allocates new ids for the next, genuinely new order.
+     */
+    fun startNewCreation() {
+        if (_uiState.value.saving) return
+        savedStateHandle.remove<String>(KEY_CREATED_ORDER_ID)
+        savedStateHandle.remove<Boolean>(KEY_CREATED_NAVIGATION_PENDING)
+        savedStateHandle.remove<String>(KEY_PENDING_FINGERPRINT)
+        savedStateHandle.remove<String>(KEY_PENDING_COMMAND)
+        savedStateHandle[KEY_CREATION_OPERATION] = UUID.randomUUID().toString()
+        savedStateHandle[KEY_INITIAL_PAYMENT_OPERATION] = UUID.randomUUID().toString()
+        _uiState.update {
+            it.copy(
+                createdOrderId = null,
+                createdNavigationPending = false,
+                saving = false,
+                saveError = null,
+                formErrors = emptyMap(),
+                initialReceivedAtMillis = timeProvider.now().toEpochMilli(),
+            )
         }
     }
 
@@ -472,5 +539,7 @@ class NewOrderViewModel @Inject constructor(
         const val KEY_INITIAL_PAYMENT_OPERATION = "new-order.initial-payment-operation"
         const val KEY_PENDING_FINGERPRINT = "new-order.pending-fingerprint"
         const val KEY_PENDING_COMMAND = "new-order.pending-command"
+        const val KEY_CREATED_ORDER_ID = "new-order.created-order-id"
+        const val KEY_CREATED_NAVIGATION_PENDING = "new-order.created-navigation-pending"
     }
 }

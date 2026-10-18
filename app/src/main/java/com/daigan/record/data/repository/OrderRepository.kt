@@ -65,11 +65,14 @@ import java.time.ZoneId
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.merge
 
 /** User facing reasons shared by repositories and screens. */
 const val ARCHIVED_OWNER_ORDER_MESSAGE = "老板已归档，请先恢复老板后再操作订单"
@@ -112,6 +115,11 @@ interface OrderRepository {
 
     fun observeOrdersForOwner(ownerId: String): Flow<List<OrderSummary>>
 
+    /**
+     * One order with its tasks, receipts and correction audit. Every emission is read
+     * in a single transaction, so a detail balance always belongs to one database
+     * version rather than a mix of independently refreshed DAO flows.
+     */
     fun observeOrderDetail(orderId: String): Flow<OrderDetail?>
 
     /** Active accounts only. Expired and not-yet-started periods are included. */
@@ -312,13 +320,15 @@ class DefaultOrderRepository @Inject constructor(
     }
 
     private data class OrderDetailSnapshot(
-        val owner: OwnerEntity?,
+        val order: OrderEntity,
+        val owner: OwnerEntity,
+        val account: GameAccountEntity,
         val tasks: List<TaskDefinitionEntity>,
         val occurrences: List<TaskOccurrenceEntity>,
         val attachments: List<AttachmentEntity>,
         val periods: List<HostingPeriodEntity>,
-        val receipts: List<ReceiptEntity> = emptyList(),
-        val corrections: List<ReceiptCorrectionEntity> = emptyList(),
+        val receipts: List<ReceiptEntity>,
+        val corrections: List<ReceiptCorrectionEntity>,
     )
 
     private data class TodayHostingSnapshot(
@@ -335,58 +345,76 @@ class DefaultOrderRepository @Inject constructor(
         val context: Map<String, AccountOwner>,
     )
 
+    /**
+     * One transactionally consistent per-order read per database change.
+     *
+     * This used to combine seven independent DAO flows. Each query re-runs on its own
+     * schedule, so one commit could be published as a mix of two database versions (for
+     * example a new receipt next to the previous period list). The invalidation sources
+     * are still Room's own table observations, but the rows are now read inside one
+     * `withTransaction` block, like [LedgerSnapshotSource] does for the global ledger.
+     * No debounce or delay hides a real inconsistency.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeOrderDetail(orderId: String): Flow<OrderDetail?> =
-        orderDao.observeById(orderId).flatMapLatest { order ->
-            if (order == null) {
+        merge(
+            orderDao.observeById(orderId).map { Unit },
+            orderDao.observePeriodsForOrder(orderId).map { Unit },
+            taskDao.observeForOrder(orderId).map { Unit },
+            occurrenceDao.observeForOrder(orderId).map { Unit },
+            attachmentDao.observeForOrder(orderId).map { Unit },
+            receiptDao.observeForOrder(orderId).map { Unit },
+            receiptDao.observeCorrectionsForOrder(orderId).map { Unit },
+            accountDao.observeAll().map { Unit },
+            ownerDao.observeAll().map { Unit },
+        ).mapLatest {
+            database.withTransaction { readOrderDetail(orderId) }
+        }.flatMapLatest { snapshot ->
+            if (snapshot == null) {
                 flowOf(null)
             } else {
-                accountDao.observeById(order.accountId).flatMapLatest { account ->
-                    if (account == null) {
-                        flowOf(null)
-                    } else {
-                        combine(
-                            ownerDao.observeById(account.ownerId),
-                            taskDao.observeForOrder(orderId),
-                            occurrenceDao.observeForOrder(orderId),
-                            attachmentDao.observeForOrder(orderId),
-                            orderDao.observePeriodsForOrder(orderId),
-                        ) { owner, tasks, occurrences, attachments, periods ->
-                            OrderDetailSnapshot(owner, tasks, occurrences, attachments, periods)
-                        }
-                            .combine(receiptDao.observeForOrder(orderId)) { snapshot, receipts ->
-                                snapshot.copy(receipts = receipts)
-                            }
-                            .combine(receiptDao.observeCorrectionsForOrder(orderId)) { snapshot, corrections ->
-                                snapshot.copy(corrections = corrections)
-                            }
-                            .flatMapLatest { snapshot ->
-                            // Daily/weekly boundaries move "today" and the live weekly
-                            // window without any database write.
-                            val rules = buildList {
-                                add(refreshOf(order))
-                                snapshot.periods.forEach { add(refreshOf(it)) }
-                            }
-                            ticker.ticks { now -> nextBoundaryAcross(rules, now) }.map { now ->
-                                val owner = snapshot.owner ?: return@map null
-                                OrderDetail(
-                                    order = order.toModel(),
-                                    owner = owner.toModel(),
-                                    account = account.toModel(),
-                                    tasks = snapshot.tasks.map { task -> task.toModel() },
-                                    periods = snapshot.periods.map { period -> period.toModel() },
-                                    occurrences = snapshot.occurrences.map { it.toModel() },
-                                    attachments = snapshot.attachments.map { it.toModel() },
-                                    receipts = snapshot.receipts.map { it.toModel() },
-                                    receiptCorrections = snapshot.corrections.map { it.toModel() },
-                                    today = GameCalendar.gameDate(now, refreshOf(order)),
-                                    now = now,
-                                )
-                            }
-                        }
-                    }
+                // Daily/weekly boundaries move "today" and the live weekly window
+                // without any database write.
+                val rules = buildList {
+                    add(refreshOf(snapshot.order))
+                    snapshot.periods.forEach { add(refreshOf(it)) }
                 }
+                ticker.ticks { now -> nextBoundaryAcross(rules, now) }
+                    .map { now -> snapshot.toDetail(now) }
             }
         }
+
+    /** Must run inside [observeOrderDetail]'s transaction; every read sees one version. */
+    private suspend fun readOrderDetail(orderId: String): OrderDetailSnapshot? {
+        val order = orderDao.findById(orderId) ?: return null
+        val account = accountDao.findById(order.accountId) ?: return null
+        val owner = ownerDao.findById(account.ownerId) ?: return null
+        return OrderDetailSnapshot(
+            order = order,
+            owner = owner,
+            account = account,
+            tasks = taskDao.findForOrder(orderId),
+            occurrences = occurrenceDao.findForOrder(orderId),
+            attachments = attachmentDao.findForOrder(orderId),
+            periods = orderDao.findPeriods(orderId),
+            receipts = receiptDao.findForOrder(orderId),
+            corrections = receiptDao.findCorrectionsForOrder(orderId),
+        )
+    }
+
+    private fun OrderDetailSnapshot.toDetail(now: Instant): OrderDetail = OrderDetail(
+        order = order.toModel(),
+        owner = owner.toModel(),
+        account = account.toModel(),
+        tasks = tasks.map { task -> task.toModel() },
+        periods = periods.map { period -> period.toModel() },
+        occurrences = occurrences.map { it.toModel() },
+        attachments = attachments.map { it.toModel() },
+        receipts = receipts.map { it.toModel() },
+        receiptCorrections = corrections.map { it.toModel() },
+        today = GameCalendar.gameDate(now, refreshOf(order)),
+        now = now,
+    )
 
     override fun observeTodayHosting(): Flow<List<TodayHostingOrder>> =
         combine(

@@ -46,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -77,13 +78,23 @@ fun NewOrderScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
-    LaunchedEffect(Unit) {
-        viewModel.createdOrderId.collect { orderId -> onCreated(orderId) }
+    // State-based navigation: a collector that attaches or reattaches after the commit
+    // still sees the destination. Acknowledging before navigating stops a second
+    // navigation from the same committed result (for example after a rotation).
+    val createdOrderId = uiState.createdOrderId
+    val navigationPending = uiState.createdNavigationPending
+    LaunchedEffect(createdOrderId, navigationPending) {
+        if (createdOrderId != null && navigationPending) {
+            viewModel.acknowledgeCreatedNavigation(createdOrderId)
+            onCreated(createdOrderId)
+        }
     }
 
     NewOrderScreen(
         uiState = uiState,
         onBack = onBack,
+        onOpenCreated = onCreated,
+        onStartNewCreation = viewModel::startNewCreation,
         onSelectType = viewModel::selectType,
         onTitle = viewModel::updateTitle,
         onPrice = viewModel::updatePrice,
@@ -116,6 +127,8 @@ fun NewOrderScreen(
 internal fun NewOrderScreen(
     uiState: NewOrderUiState,
     onBack: () -> Unit,
+    onOpenCreated: (String) -> Unit,
+    onStartNewCreation: () -> Unit,
     onSelectType: (OrderType) -> Unit,
     onTitle: (String) -> Unit,
     onPrice: (String) -> Unit,
@@ -141,6 +154,7 @@ internal fun NewOrderScreen(
     modifier: Modifier = Modifier,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
+    val createdOrderId = uiState.createdOrderId
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, modifier = modifier) { padding ->
         Column(
             modifier = Modifier
@@ -161,6 +175,13 @@ internal fun NewOrderScreen(
                 uiState.loadError != null -> Box(modifier = Modifier.padding(16.dp)) {
                     EmptyStateCard(title = "无法创建订单", description = checkNotNull(uiState.loadError))
                 }
+
+                // Terminal state: this form instance already committed an order. The
+                // form is not shown again, so it cannot be submitted as a new order.
+                createdOrderId != null -> CreatedOrderResult(
+                    onOpen = { onOpenCreated(createdOrderId) },
+                    onStartNewCreation = onStartNewCreation,
+                )
 
                 else -> LazyColumn(
                     contentPadding = PaddingValues(16.dp),
@@ -379,6 +400,60 @@ internal fun NewOrderScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * The committed result of this form instance. It is reached after a successful submit
+ * and stays until the user explicitly starts another creation flow, so the same
+ * visible form can never be submitted twice as two different commands.
+ */
+@Composable
+private fun CreatedOrderResult(
+    onOpen: () -> Unit,
+    onStartNewCreation: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .testTag("new-order-created"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "订单已创建",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("new-order-created-title"),
+                )
+                Text(
+                    text = "订单和首笔实收（如有）已经保存，这张表单不会再次建单。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "需要另一张订单请选择“再建一张”。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Button(
+            onClick = onOpen,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("new-order-created-open"),
+        ) { Text("查看订单") }
+        TextButton(
+            onClick = onStartNewCreation,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("new-order-created-new"),
+        ) { Text("再建一张") }
     }
 }
 
