@@ -123,13 +123,16 @@ Phase 4 只交付模板库、模板编辑、账号/建单默认值与模板文�
    XML: 22 suites, 126 tests, 0 failures, 0 errors, 0 skipped
 ```
 
-### 完整设备套件（最终提交代码）
+### 完整设备套件（应用代码与最终 APK 相同）
 
 ```text
 ./gradlew :app:connectedDebugAndroidTest --offline --console=plain
 -> BUILD SUCCESSFUL in 7m 21s
    175 tests, 0 failures, 0 errors, 0 skipped（1 个 result XML）
 ```
+
+该套件运行时的应用代码即实现提交 `edc33ae`；其后的文档、截图与 JVM 回归提交只增加
+非应用代码内容，不改变应用代码或 APK。
 
 其中新增 28 个设备用例：`MigrationV5ToV6Test`（2）、`BuiltInTemplateContentTest`（5）、
 `GameTemplateRepositoryTest`（9）、`TemplateOrderSnapshotTest`（3）、
