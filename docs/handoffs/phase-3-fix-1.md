@@ -51,8 +51,14 @@ unique key and re-reads the winner's committed row.
 launching the coroutine. The create/receipt operation ids, the fingerprint and the exact
 form payload live in `SavedStateHandle` through `PendingOrderCommandCodec`; an identical
 retry after failure or process restoration reuses them, while a changed payload is
-treated as a new command with new ids. Successful submission clears the pending command
-and rotates the ids.
+treated as a new command with new ids.
+
+**Correction (Phase 3 fix 2).** Successful submission used to clear the pending command,
+rotate both ids and re-enable the button immediately, which let a repeated tap on the
+still-visible success form become a second order. Success is now a terminal state for
+that form instance (`NewOrderUiState.createdOrderId`): the committed order id, the
+operation ids and the payload are kept until the navigation is acknowledged, and only
+the explicit “再建一张” action (`startNewCreation()`) allocates new ids.
 
 ## 3. One timestamp precision
 
@@ -85,8 +91,20 @@ October order count still includes the order; retries preserve the submitted tim
 
 `LedgerSnapshotSource` now reads orders, periods, receipts, corrections, accounts and
 owners inside **one** `database.withTransaction`; invalidation is the merge of the six
-Room table observations. `StatisticsRepository`, receipt history and order details all
-derive from that one snapshot. No debounce/delay was added.
+Room table observations. `StatisticsRepository` and receipt history derive from that
+one snapshot. No debounce/delay was added.
+
+**Correction (Phase 3 fix 2).** The original text also claimed order detail derived
+from that snapshot. It did not: `OrderRepository.observeOrderDetail` combined its own
+owner/tasks/occurrences/attachments/periods/receipts/corrections DAO flows, so one
+commit could be published as a mix of two database versions. Order detail now performs
+its own per-order read inside one `database.withTransaction`
+(`OrderRepository.readOrderDetail`), invalidated by the same Room table observations.
+That is a separate transaction from the global ledger snapshot: the two read models
+agree on committed data, but the detail is not literally the same snapshot instance.
+`OrderDetailConsistencyTest` keeps a detail subscriber alive through
+create-with-receipt → payment → amendment → void and fails on a receipt without its
+period, a balance that disagrees with its own active receipts, or a lost history entry.
 
 `LedgerSnapshotConsistencyTest` keeps three subscribers alive while creating an order
 with an initial receipt, renewing, paying, amending and voiding. Every emission must

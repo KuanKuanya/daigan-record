@@ -408,8 +408,13 @@ class LedgerSnapshotSource {
   `database.withTransaction` 中读取订单、期次、收款、更正、账号与老板。
 - Room 的表失效仍会触发重读（六张表的失效信号合并），任何写入后都会得到一个新的
   完整版本；没有 debounce/延迟掩盖竞态。
-- 统计页、收款明细页与订单详情都从同一份快照派生，因此同一次提交在三个页面上的
-  实收/欠款一致。
+- 统计页与收款明细页从这份全局快照派生。订单详情**不**复用该快照：它按订单读取
+  自己的订单、账号、老板、任务、发生记录、截图、期次、收款与更正，同样在**一个**
+  `withTransaction`（`OrderRepository.readOrderDetail`）内完成，因此每次详情发射
+  也是一个完整的数据库版本（收款必有期次、余额等于有效收款之和），但它与全局快照
+  是两次独立事务，不声称是同一快照实例。
+- 订单详情的持续订阅一致性由 `OrderDetailConsistencyTest` 覆盖；统计/流水/台账的
+  跨表一致性由 `LedgerSnapshotConsistencyTest` 覆盖。
 - 报表时区：月份窗口按用户时区计算 `[startInclusive, endExclusive)`；实收按
   `receivedAt` 归属，订单数量按 `createdAt` 归属，欠款为全时段金额。
 - 归档只影响“工作写入”，不影响读模型与收款；已完成/已到期/已归档订单的欠款

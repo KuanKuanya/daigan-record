@@ -5,7 +5,9 @@ remote publication requested). Implementation commit: `9aa4cf4`
 (`feat(phase-3): receipts, corrections and idempotent order creation`).
 
 The independent Phase 3 acceptance found blockers; the repair pass is recorded separately
-in `docs/handoffs/phase-3-fix-1.md`. This document describes what Phase 3 delivers and
+in `docs/handoffs/phase-3-fix-1.md`, and the second repair (committed-creation terminal
+state, order-detail read boundary, empty-state test readiness) in
+`docs/handoffs/phase-3-fix-2.md`. This document describes what Phase 3 delivers and
 which evidence was produced for the delivered state.
 
 ## Delivered behaviour
