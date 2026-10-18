@@ -37,6 +37,8 @@ object OccurrenceRules {
     ): Boolean {
         if (date.isBefore(periodStart)) return false
         return when (recurrence) {
+            // One-time work is not recurrence: it never owns a game-day slot.
+            RecurrenceType.ONE_TIME -> false
             RecurrenceType.DAILY, RecurrenceType.WEEKLY -> true
             RecurrenceType.SELECTED_WEEKDAYS -> date.dayOfWeek in weekdays
             RecurrenceType.EVERY_N_DAYS -> {
@@ -155,6 +157,7 @@ object OccurrenceRules {
             RecurrenceType.SELECTED_WEEKDAYS -> "S"
             RecurrenceType.EVERY_N_DAYS -> "E"
             RecurrenceType.WEEKLY -> "W"
+            RecurrenceType.ONE_TIME -> error("一次性任务没有发生记录")
         }
         return OccurrenceSlot(
             key = "$prefix:$date",

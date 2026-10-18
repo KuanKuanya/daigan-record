@@ -51,6 +51,15 @@ data class GameAccountEntity(
      * keep this null, so timestamp equality is never used as an identity.
      */
     val archiveBatchId: String? = null,
+    /**
+     * Optional template preselected when a new order is started for this account.
+     *
+     * Deliberately **not** a foreign key: deleting a template must never require
+     * touching or cascading through business rows. The template repository clears this
+     * value in the same transaction when its template is deleted, and a dangling value
+     * is treated as "no default" on read.
+     */
+    val defaultTemplateId: String? = null,
 ) {
     fun toModel(): GameAccount = GameAccount(
         id = id,
@@ -64,5 +73,6 @@ data class GameAccountEntity(
         createdAt = createdAt,
         archived = archivedAt != null,
         archivedWithOwner = archiveBatchId != null,
+        defaultTemplateId = defaultTemplateId,
     )
 }

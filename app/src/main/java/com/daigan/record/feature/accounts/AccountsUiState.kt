@@ -53,6 +53,9 @@ data class AccountFormUiState(
     val isSaving: Boolean = false,
     val saveError: String? = null,
     val completed: Boolean = false,
+    /** Optional template preselected for new orders on this account. */
+    val templates: List<com.daigan.record.data.model.GameTemplateSummary> = emptyList(),
+    val templateName: String? = null,
 )
 
 data class ArchivedRecordsUiState(

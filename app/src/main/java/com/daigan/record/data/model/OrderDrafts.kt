@@ -50,6 +50,17 @@ data class InitialPaymentDraft(
     val receivedAt: Instant? = null,
 )
 
+/**
+ * Truthful snapshot of the template an order was created from. It is copied as plain
+ * text at creation and never points at the editable template row, so editing, replacing
+ * or deleting the template later cannot rewrite history. Legacy orders have null.
+ */
+data class OrderTemplateProvenance(
+    val templateId: String,
+    val gameName: String,
+    val templateVersion: String,
+)
+
 data class ShortOrderDraft(
     val ownerId: String,
     val accountId: String,
@@ -60,6 +71,8 @@ data class ShortOrderDraft(
     val notes: String = "",
     val tasks: List<TaskDraft> = listOf(TaskDraft()),
     val initialPayment: InitialPaymentDraft? = null,
+    /** Template the creation defaults came from; descriptive, never a live reference. */
+    val sourceTemplate: OrderTemplateProvenance? = null,
     /**
      * Identity of the whole create command. Callers that retry must reuse the same
      * value; a genuinely new order must use a new one. The default is only a
@@ -107,6 +120,8 @@ data class HostingOrderDraft(
     val refresh: GameRefreshRules = GameRefreshRules.provisional(),
     val tasks: List<TaskDraft> = listOf(TaskDraft()),
     val initialPayment: InitialPaymentDraft? = null,
+    /** Template the creation defaults came from; see [ShortOrderDraft.sourceTemplate]. */
+    val sourceTemplate: OrderTemplateProvenance? = null,
     /** Stable identity of the whole create command; see [ShortOrderDraft]. */
     val creationOperationId: String = UUID.randomUUID().toString(),
 ) {
@@ -141,6 +156,12 @@ data class HostingOrderDraft(
         if (tasks.size > ShortOrderDraft.MAX_TASKS) errors["tasks"] = "最多 ${ShortOrderDraft.MAX_TASKS} 项任务"
         tasks.forEachIndexed { index, task ->
             task.validate(index, errors)
+            if (task.recurrence == RecurrenceType.ONE_TIME) {
+                // A one-off task has no game-day occurrence, so it cannot live in a
+                // hosting period. Rejecting it here is what stops a one-time template
+                // task from silently becoming a daily check-in.
+                errors["task.$index.recurrence"] = "一次性任务只能用于短期单；托管任务请选择周期"
+            }
         }
         val weeklyTasks = tasks.filter { it.recurrence == RecurrenceType.WEEKLY }
         if (weeklyTasks.isNotEmpty()) {
@@ -170,7 +191,7 @@ private fun TaskDraft.validate(index: Int, errors: MutableMap<String, String>) {
         }
     }
     when (recurrence) {
-        RecurrenceType.DAILY, RecurrenceType.WEEKLY -> Unit
+        RecurrenceType.ONE_TIME, RecurrenceType.DAILY, RecurrenceType.WEEKLY -> Unit
         RecurrenceType.SELECTED_WEEKDAYS -> if (weekdays.isEmpty()) {
             errors["$prefix.weekdays"] = "请为指定星期任务选择执行日"
         }

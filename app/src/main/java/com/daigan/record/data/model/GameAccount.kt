@@ -20,6 +20,12 @@ data class GameAccount(
      * archived accounts stay archived.
      */
     val archivedWithOwner: Boolean,
+    /**
+     * Template preselected for a new order on this account. Null for legacy accounts and
+     * for accounts that do not use a template; using the account and its orders never
+     * requires one.
+     */
+    val defaultTemplateId: String? = null,
 ) {
     val hasStoredPassword: Boolean
         get() = loginMethod == LoginMethod.PASSWORD && !password.isNullOrEmpty()
@@ -33,6 +39,8 @@ data class AccountDraft(
     val loginAccount: String = "",
     val loginMethod: LoginMethod = LoginMethod.VERIFICATION_CODE,
     val password: String = "",
+    /** Optional creation default for new orders; never required to use the account. */
+    val defaultTemplateId: String? = null,
 ) {
     /**
      * Trims every text field and drops the password whenever the account uses
@@ -74,6 +82,7 @@ data class AccountDraft(
             loginAccount = account.loginAccount,
             loginMethod = account.loginMethod,
             password = account.password.orEmpty(),
+            defaultTemplateId = account.defaultTemplateId,
         )
     }
 }

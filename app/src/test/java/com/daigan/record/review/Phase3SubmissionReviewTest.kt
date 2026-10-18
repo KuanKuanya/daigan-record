@@ -6,6 +6,7 @@ import com.daigan.record.data.model.OrderType
 import com.daigan.record.data.repository.OrderRepository
 import com.daigan.record.feature.orders.NewOrderViewModel
 import com.daigan.record.testing.FakeGameAccountRepository
+import com.daigan.record.testing.FakeGameTemplateRepository
 import com.daigan.record.testing.FakeOrderRepository
 import com.daigan.record.testing.FakeOwnerRepository
 import com.daigan.record.testing.FixedTimeProvider
@@ -38,6 +39,7 @@ class Phase3SubmissionReviewTest {
         val vm = NewOrderViewModel(
             SavedStateHandle(mapOf(Routes.OWNER_ID_ARG to "owner-1", Routes.ACCOUNT_ID_ARG to "account-1")),
             owners, accounts, orders, FixedTimeProvider(),
+            FakeGameTemplateRepository(),
         )
         runCurrent()
         vm.selectType(OrderType.SHORT_TASK)

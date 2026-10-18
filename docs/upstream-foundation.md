@@ -68,7 +68,7 @@ export ANDROID_HOME=$HOME/Library/Android/sdk
 | `androidx.compose.material:material-icons-extended` | 由 Compose BOM 管理 | 使用与设计稿一致的导航与操作图标 |
 | `androidx.room:room-testing` | 2.8.4（与 Room 同版本） | `MigrationTestHelper` |
 | `androidx.test.espresso:espresso-core` | 3.7.0 | Compose UI 测试传递引入的 3.5.0 在 API 36 调用已移除的 `InputManager.getInstance()` 而崩溃 |
-| `kotlinx-serialization-json` (androidTest) / `serialization-core` (implementation) | 1.9.0 | `room-testing` 的生成序列化器需要较新运行时；传递固定为 1.7.3 会导致 `AbstractMethodError` |
+| `kotlinx-serialization-json` (androidTest) / `serialization-core` (implementation) | 1.9.0 | `room-testing` 的生成序列化器需要较新运行时；传递固定为 1.7.3 会导致 `AbstractMethodError`。Phase 4 起 JSON 运行时也用于模板文件编解码（`implementation`），版本不变，未引入序列化编译器插件 |
 
 ## 4. 本机环境
 

@@ -7,10 +7,13 @@ import com.daigan.record.core.time.GameCalendar
 import com.daigan.record.core.time.GameRefreshRules
 import com.daigan.record.core.time.TimeProvider
 import com.daigan.record.data.model.GameAccount
+import com.daigan.record.data.model.GameTemplate
+import com.daigan.record.data.model.GameTemplateSummary
 import com.daigan.record.data.model.HostingOrderDraft
 import com.daigan.record.data.model.InitialPaymentDraft
 import com.daigan.record.data.model.Money
 import com.daigan.record.data.model.OrderCommandFingerprint
+import com.daigan.record.data.model.OrderTemplateProvenance
 import com.daigan.record.data.model.OrderType
 import com.daigan.record.data.model.Owner
 import com.daigan.record.data.model.PaymentChannel
@@ -18,8 +21,13 @@ import com.daigan.record.data.model.PaymentMode
 import com.daigan.record.data.model.ProgressType
 import com.daigan.record.data.model.RecurrenceType
 import com.daigan.record.data.model.ShortOrderDraft
+import com.daigan.record.data.model.TEMPLATE_NO_HOSTING_TASKS_MESSAGE
+import com.daigan.record.data.model.TEMPLATE_NO_SHORT_TASKS_MESSAGE
 import com.daigan.record.data.model.TaskDraft
+import com.daigan.record.data.model.TemplateOrderKind
+import com.daigan.record.data.model.toTaskDraft
 import com.daigan.record.data.repository.GameAccountRepository
+import com.daigan.record.data.repository.GameTemplateRepository
 import com.daigan.record.data.repository.OrderRepository
 import com.daigan.record.data.repository.OwnerRepository
 import com.daigan.record.ui.navigation.Routes
@@ -62,6 +70,12 @@ data class NewOrderUiState(
     val initialNote: String = "",
     /** Actual first-receipt moment. Defaults to "now"; historical values are allowed. */
     val initialReceivedAtMillis: Long = 0L,
+    /** Template library and the currently applied creation defaults (optional). */
+    val templates: List<GameTemplateSummary> = emptyList(),
+    val selectedTemplateId: String? = null,
+    val selectedTemplateName: String? = null,
+    val selectedTemplateVersion: String? = null,
+    val templateNotice: String? = null,
     val formErrors: Map<String, String> = emptyMap(),
     val saveError: String? = null,
     val saving: Boolean = false,
@@ -102,6 +116,7 @@ class NewOrderViewModel @Inject constructor(
     private val accountRepository: GameAccountRepository,
     private val orderRepository: OrderRepository,
     private val timeProvider: TimeProvider,
+    private val templateRepository: GameTemplateRepository,
 ) : ViewModel() {
 
     private val ownerId: String = checkNotNull(savedStateHandle[Routes.OWNER_ID_ARG]) {
@@ -126,6 +141,15 @@ class NewOrderViewModel @Inject constructor(
     )
     val uiState: StateFlow<NewOrderUiState> = _uiState.asStateFlow()
 
+    /**
+     * The tasks produced by the last template application. Used only to decide whether a
+     * type switch may re-derive the defaults: once the user edits a task, their work is
+     * never silently replaced. Not persisted; after process restoration the form keeps
+     * the exact tasks from the pending command instead of re-applying a template.
+     */
+    private var lastAppliedTasks: List<TaskDraft>? = null
+    private var restoredPendingCommand = false
+
     init {
         restorePendingCommand()
         viewModelScope.launch {
@@ -139,14 +163,42 @@ class NewOrderViewModel @Inject constructor(
                 account.archived -> "游戏账号已归档，请先恢复账号后再接新单"
                 else -> null
             }
+            runCatching { templateRepository.ensureBuiltInTemplates() }
+            val templates = runCatching { templateRepository.findAllSummaries() }
+                .getOrDefault(emptyList())
             _uiState.update {
                 it.copy(
                     loading = false,
                     loadError = error,
                     owner = owner,
                     account = account,
+                    templates = templates,
                 )
             }
+            if (error == null && !restoredPendingCommand && !_uiState.value.isCreated) {
+                applyAccountDefaultTemplate(account?.defaultTemplateId, templates)
+            }
+        }
+    }
+
+    /**
+     * Preselects the account's default template and fills the form once. A missing or
+     * deleted template is ignored; an account never requires a template to create an
+     * order, and a restored pending command is left exactly as it was.
+     */
+    private suspend fun applyAccountDefaultTemplate(
+        templateId: String?,
+        templates: List<GameTemplateSummary>,
+    ) {
+        if (templateId == null || templates.none { it.id == templateId }) return
+        val template = runCatching { templateRepository.findTemplate(templateId) }.getOrNull()
+            ?: return
+        applyTemplateDefaults(template, _uiState.value.type)
+        _uiState.update {
+            it.copy(
+                templateNotice = "已按账号默认模板填入「${template.gameName} · " +
+                    "${template.templateVersion}」；可随时修改或清除。",
+            )
         }
     }
 
@@ -160,6 +212,7 @@ class NewOrderViewModel @Inject constructor(
         val restored = savedStateHandle.get<String>(KEY_PENDING_COMMAND)
             ?.let(PendingOrderCommandCodec::decode)
             ?: return
+        restoredPendingCommand = true
         savedStateHandle[KEY_CREATION_OPERATION] = restored.creationOperationId
         savedStateHandle[KEY_INITIAL_PAYMENT_OPERATION] = restored.initialPaymentOperationId
         val form = restored.form
@@ -184,6 +237,9 @@ class NewOrderViewModel @Inject constructor(
                 initialChannel = form.initialChannel,
                 initialNote = form.initialNote,
                 initialReceivedAtMillis = restored.initialReceivedAtMillis,
+                selectedTemplateId = form.sourceTemplateId,
+                selectedTemplateName = form.sourceTemplateName,
+                selectedTemplateVersion = form.sourceTemplateVersion,
             )
         }
     }
@@ -206,6 +262,13 @@ class NewOrderViewModel @Inject constructor(
     }
 
     fun selectType(type: OrderType) {
+        val previous = _uiState.value
+        if (previous.type == type) return
+        // Re-derive the template defaults only while the task list is still exactly what
+        // the template produced. Edited tasks are the user's work and are never replaced.
+        val mayReapply = previous.selectedTemplateId != null &&
+            lastAppliedTasks != null &&
+            previous.tasks == lastAppliedTasks
         _uiState.update { state ->
             val defaultHosting = state.title == "日常托管"
             val defaultShort = state.title == "短期任务"
@@ -216,6 +279,96 @@ class NewOrderViewModel @Inject constructor(
                     type == OrderType.SHORT_TASK && defaultHosting -> "短期任务"
                     else -> state.title
                 },
+                formErrors = emptyMap(),
+                saveError = null,
+            )
+        }
+        val templateId = previous.selectedTemplateId
+        if (mayReapply && templateId != null) {
+            viewModelScope.launch {
+                val template = runCatching { templateRepository.findTemplate(templateId) }
+                    .getOrNull()
+                    ?: return@launch
+                applyTemplateDefaults(template, type)
+            }
+        } else if (previous.selectedTemplateId != null) {
+            _uiState.update {
+                it.copy(
+                    templateNotice = "已切换订单类型；当前任务保留你的编辑，可重新选择模板以套用默认值。",
+                )
+            }
+        }
+    }
+
+    /**
+     * Fills task defaults and refresh rules from one template. The template is a creation
+     * default only; the created order stores its own copies and provenance label.
+     */
+    fun applyTemplate(templateId: String) {
+        val state = _uiState.value
+        if (state.isCreated || state.saving) return
+        viewModelScope.launch {
+            val template = runCatching { templateRepository.findTemplate(templateId) }.getOrNull()
+            if (template == null) {
+                _uiState.update { it.copy(templateNotice = "模板不存在，可能已被删除") }
+                return@launch
+            }
+            applyTemplateDefaults(template, _uiState.value.type)
+        }
+    }
+
+    /** Drops the template label and notice; the current tasks stay as editable drafts. */
+    fun clearTemplate() {
+        lastAppliedTasks = null
+        _uiState.update {
+            it.copy(
+                selectedTemplateId = null,
+                selectedTemplateName = null,
+                selectedTemplateVersion = null,
+                templateNotice = "已清除模板默认值；当前任务仍可继续编辑。",
+            )
+        }
+    }
+
+    private fun applyTemplateDefaults(
+        template: GameTemplate,
+        type: OrderType,
+    ) {
+        if (_uiState.value.isCreated) return
+        val kind = if (type == OrderType.SHORT_TASK) {
+            TemplateOrderKind.SHORT_TASK
+        } else {
+            TemplateOrderKind.HOSTING
+        }
+        val applicable = template.tasksFor(kind)
+        if (applicable.isEmpty()) {
+            // Never reinterpret a one-time task as a daily occurrence, and never wipe the
+            // tasks the user already has because a template does not fit this order type.
+            _uiState.update {
+                it.copy(
+                    templateNotice = if (kind == TemplateOrderKind.HOSTING) {
+                        "「${template.gameName}」$TEMPLATE_NO_HOSTING_TASKS_MESSAGE"
+                    } else {
+                        "「${template.gameName}」$TEMPLATE_NO_SHORT_TASKS_MESSAGE"
+                    },
+                )
+            }
+            return
+        }
+        val tasks = applicable.map { it.toTaskDraft() }
+        lastAppliedTasks = tasks
+        _uiState.update {
+            it.copy(
+                tasks = tasks,
+                zoneText = template.refresh.zoneId.id,
+                dailyRefresh = template.refresh.dailyRefresh,
+                weeklyRefreshDay = template.refresh.weeklyRefreshDay,
+                weeklyRefreshTime = template.refresh.weeklyRefreshTime,
+                selectedTemplateId = template.id,
+                selectedTemplateName = template.gameName,
+                selectedTemplateVersion = template.templateVersion,
+                templateNotice = "已填入「${template.gameName} · ${template.templateVersion}」" +
+                    "的 ${tasks.size} 项任务与刷新规则；仍可修改。",
                 formErrors = emptyMap(),
                 saveError = null,
             )
@@ -464,6 +617,20 @@ class NewOrderViewModel @Inject constructor(
         } else {
             null
         }
+        // Provenance is a truthful label captured at creation. It never references the
+        // editable template row, so later template changes cannot rewrite this order.
+        val provenance = state.selectedTemplateId
+            ?.takeIf {
+                !state.selectedTemplateName.isNullOrBlank() &&
+                    !state.selectedTemplateVersion.isNullOrBlank()
+            }
+            ?.let { id ->
+                OrderTemplateProvenance(
+                    templateId = id,
+                    gameName = checkNotNull(state.selectedTemplateName),
+                    templateVersion = checkNotNull(state.selectedTemplateVersion),
+                )
+            }
         return if (state.isShort) {
             ShortOrderDraft(
                 ownerId = ownerId,
@@ -475,6 +642,7 @@ class NewOrderViewModel @Inject constructor(
                 notes = state.notes,
                 tasks = state.tasks,
                 initialPayment = initialPayment,
+                sourceTemplate = provenance,
                 creationOperationId = creationOperationId,
             )
         } else {
@@ -490,6 +658,7 @@ class NewOrderViewModel @Inject constructor(
                 refresh = refresh,
                 tasks = state.tasks,
                 initialPayment = initialPayment,
+                sourceTemplate = provenance,
                 creationOperationId = creationOperationId,
             )
         }
@@ -532,6 +701,9 @@ class NewOrderViewModel @Inject constructor(
         initialAmountYuan = initialAmountYuan,
         initialChannel = initialChannel,
         initialNote = initialNote,
+        sourceTemplateId = selectedTemplateId,
+        sourceTemplateName = selectedTemplateName,
+        sourceTemplateVersion = selectedTemplateVersion,
     )
 
     private companion object {

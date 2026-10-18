@@ -5,6 +5,7 @@ import com.daigan.record.data.model.AccountField
 import com.daigan.record.data.model.LoginMethod
 import com.daigan.record.data.repository.ARCHIVED_OWNER_ACCOUNT_MESSAGE
 import com.daigan.record.testing.FakeGameAccountRepository
+import com.daigan.record.testing.FakeGameTemplateRepository
 import com.daigan.record.testing.FakeOwnerRepository
 import com.daigan.record.testing.MainDispatcherRule
 import com.daigan.record.testing.account
@@ -37,6 +38,7 @@ class AccountFormViewModelTest {
             ),
             ownerRepository = ownerRepository,
             accountRepository = accountRepository,
+            templateRepository = FakeGameTemplateRepository(),
         )
     }
 
@@ -154,6 +156,7 @@ class AccountFormViewModelTest {
             ),
             ownerRepository = ownerRepository,
             accountRepository = accountRepository,
+            templateRepository = FakeGameTemplateRepository(),
         )
         viewModel.onDraftChange {
             it.copy(gameName = "鸣潮", server = "国服", uid = "10002136", loginAccount = "demo")

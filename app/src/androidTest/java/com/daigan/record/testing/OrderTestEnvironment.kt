@@ -24,6 +24,7 @@ import com.daigan.record.data.model.TaskDraft
 import com.daigan.record.data.repository.AttachmentSync
 import com.daigan.record.data.repository.DefaultAttachmentRepository
 import com.daigan.record.data.repository.DefaultGameAccountRepository
+import com.daigan.record.data.repository.DefaultGameTemplateRepository
 import com.daigan.record.data.repository.DefaultOrderRepository
 import com.daigan.record.data.repository.DefaultOwnerRepository
 import com.daigan.record.data.repository.DefaultReceiptRepository
@@ -31,6 +32,7 @@ import com.daigan.record.data.repository.DefaultStatisticsRepository
 import com.daigan.record.data.repository.DisplayedHostingSnapshot
 import com.daigan.record.data.repository.LedgerSnapshotSource
 import com.daigan.record.data.repository.ReceiptLedger
+import com.daigan.record.data.template.AssetBuiltInTemplateSource
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -210,6 +212,7 @@ class OrderTestEnvironment(
     val receiptRepository: DefaultReceiptRepository
     val statisticsRepository: DefaultStatisticsRepository
     val ledgerSnapshotSource: LedgerSnapshotSource
+    val templateRepository: DefaultGameTemplateRepository
     private val dbName = databaseName
 
     init {
@@ -280,6 +283,13 @@ class OrderTestEnvironment(
             ownerDao = database.ownerDao(),
             timeProvider = clock,
             sync = attachmentSync,
+        )
+        templateRepository = DefaultGameTemplateRepository(
+            database = database,
+            templateDao = database.templateDao(),
+            // Real shipped assets, so tests exercise the content that users receive.
+            builtInSource = AssetBuiltInTemplateSource(context),
+            timeProvider = clock,
         )
     }
 

@@ -84,13 +84,27 @@ class NavigationTest {
         composeTestRule.onAllNodesWithText("今日事项").assertCountEquals(0)
     }
 
+    /**
+     * Phase 4 replaced the template placeholder with the real library. The test keeps its
+     * original intent (an independent settings sub-page with working back navigation) and
+     * now asserts the implemented feature. The pending copy is still covered for the
+     * reminder/backup entries below.
+     */
     @Test
-    fun settingsEntryShowsHonestPendingStateAndKeepsBackNavigation() {
+    fun settingsTemplateEntryOpensTheRealLibraryAndKeepsBackNavigation() {
         openAccounts()
         composeTestRule.onNodeWithContentDescription("设置").performClick()
         composeTestRule.onNodeWithText("游戏模板").performClick()
 
-        composeTestRule.onNodeWithText("功能尚未提供").assertExists()
+        composeTestRule.onNodeWithTag("template-library").assertExists()
+        composeTestRule.onNodeWithTag("template-library-new").assertExists()
+        composeTestRule.onNodeWithTag("template-library-import").assertExists()
+        // Built-ins are seeded by the library itself, so the list is not empty.
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("重返未来：1999")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("鸣潮").assertExists()
         composeTestRule.onAllNodesWithText("数据统计").assertCountEquals(0)
 
         composeTestRule.onNodeWithContentDescription("返回").performClick()
@@ -130,6 +144,12 @@ class NavigationTest {
         composeTestRule.onNodeWithText("收款明细").performClick()
 
         composeTestRule.onNodeWithText("全部实收流水", substring = true).assertExists()
+        // The empty state appears only after the first database snapshot; wait for the
+        // condition instead of assuming the flow emitted in the same frame as the tap.
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("还没有收款记录")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("还没有收款记录").assertExists()
         // Independent page: no bottom navigation.
         composeTestRule.onAllNodesWithText("今日事项").assertCountEquals(0)

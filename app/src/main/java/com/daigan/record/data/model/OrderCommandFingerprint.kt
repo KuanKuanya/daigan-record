@@ -20,6 +20,11 @@ import java.util.Locale
  * - the optional initial receipt time to the persisted millisecond precision,
  * - the optional initial receipt's own operation id.
  *
+ * Phase 4 template provenance is deliberately **excluded**: it is a descriptive label
+ * ("defaults came from this template"), not part of the price, tasks or terms. A retry
+ * that reopens a pending form after process death therefore stays the same command even
+ * if the restored form can no longer name the template it originally used.
+ *
  * Length-prefixed tokens make the encoding unambiguous (`a` + `b` never collides with
  * `ab`).
  */

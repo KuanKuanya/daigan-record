@@ -17,7 +17,17 @@ enum class PaymentMode { ONE_TIME, INSTALLMENTS }
 
 enum class ProgressType { CHECKBOX, NUMERIC }
 
-enum class RecurrenceType { DAILY, WEEKLY, SELECTED_WEEKDAYS, EVERY_N_DAYS }
+/**
+ * Occurrence recurrence of one task.
+ *
+ * [ONE_TIME] was added in Phase 4 for template tasks that only make sense inside a
+ * short order: the work is done once and has no game-day or game-week occurrence.
+ * It is **not** a daily task: [com.daigan.record.data.model.OccurrenceRules] produces
+ * no slot for it, and a hosting order rejects it instead of silently treating it as
+ * `DAILY`. Short orders never generate occurrences for any recurrence, so the value is
+ * an explicit "one-off" marker there rather than an inferred default.
+ */
+enum class RecurrenceType { ONE_TIME, DAILY, WEEKLY, SELECTED_WEEKDAYS, EVERY_N_DAYS }
 
 enum class BatchScope { HOSTING_ORDER, HOSTING_ALL, SHORT_ORDER }
 
@@ -36,6 +46,10 @@ data class Order(
     val refresh: GameRefreshRulesDomain,
     val createdAt: Instant,
     val completedAt: Instant?,
+    /** Truthful template provenance captured at creation; null for legacy/no-template. */
+    val sourceTemplateId: String? = null,
+    val sourceTemplateName: String? = null,
+    val sourceTemplateVersion: String? = null,
 ) {
     val completed: Boolean get() = completedAt != null
     val isHosting: Boolean get() = type == OrderType.HOSTING

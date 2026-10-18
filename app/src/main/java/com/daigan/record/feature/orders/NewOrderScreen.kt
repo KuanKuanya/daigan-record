@@ -96,6 +96,8 @@ fun NewOrderScreen(
         onOpenCreated = onCreated,
         onStartNewCreation = viewModel::startNewCreation,
         onSelectType = viewModel::selectType,
+        onApplyTemplate = viewModel::applyTemplate,
+        onClearTemplate = viewModel::clearTemplate,
         onTitle = viewModel::updateTitle,
         onPrice = viewModel::updatePrice,
         onPaymentMode = viewModel::selectPaymentMode,
@@ -130,6 +132,8 @@ internal fun NewOrderScreen(
     onOpenCreated: (String) -> Unit,
     onStartNewCreation: () -> Unit,
     onSelectType: (OrderType) -> Unit,
+    onApplyTemplate: (String) -> Unit,
+    onClearTemplate: () -> Unit,
     onTitle: (String) -> Unit,
     onPrice: (String) -> Unit,
     onPaymentMode: (PaymentMode) -> Unit,
@@ -221,6 +225,14 @@ internal fun NewOrderScreen(
                                 label = { Text("短期任务") },
                             )
                         }
+                    }
+
+                    item {
+                        TemplateSelector(
+                            state = uiState,
+                            onApplyTemplate = onApplyTemplate,
+                            onClearTemplate = onClearTemplate,
+                        )
                     }
 
                     item {
@@ -457,6 +469,76 @@ private fun CreatedOrderResult(
     }
 }
 
+/**
+ * Optional template picker. A template only fills this form's defaults; it is not a
+ * requirement for creating an order and never changes an existing one.
+ */
+@Composable
+private fun TemplateSelector(
+    state: NewOrderUiState,
+    onApplyTemplate: (String) -> Unit,
+    onClearTemplate: () -> Unit,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .testTag("new-order-template-selector"),
+        ) {
+            SectionTitle("游戏模板（选填）")
+            Text(
+                text = "选择模板会填入适合当前订单类型的任务与刷新规则，之后仍可逐项修改。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (state.templates.isEmpty()) {
+                Text(
+                    text = "模板库为空；可先在 设置 → 游戏模板 新建或导入。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .horizontalScroll(rememberScrollState()),
+                ) {
+                    FilterChip(
+                        selected = state.selectedTemplateId == null,
+                        onClick = onClearTemplate,
+                        label = { Text("不使用模板") },
+                    )
+                    state.templates.forEach { template ->
+                        FilterChip(
+                            selected = state.selectedTemplateId == template.id,
+                            onClick = { onApplyTemplate(template.id) },
+                            label = { Text(template.label) },
+                        )
+                    }
+                }
+            }
+            state.selectedTemplateName?.let { name ->
+                Text(
+                    text = "当前模板：$name · ${state.selectedTemplateVersion.orEmpty()}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            state.templateNotice?.let { notice ->
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -682,7 +764,7 @@ private fun RefreshRulesEditor(
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            SectionTitle("刷新规则（用户自填 · 待第四阶段核对官方模板）")
+            SectionTitle("刷新规则（来自模板或手动填写，可修改）")
             OutlinedTextField(
                 value = zoneText,
                 onValueChange = onZone,
@@ -832,13 +914,17 @@ private fun TaskEditor(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                 ) {
-                    RecurrenceType.entries.forEach { recurrence ->
-                        FilterChip(
-                            selected = task.recurrence == recurrence,
-                            onClick = { onChange { it.copy(recurrence = recurrence) } },
-                            label = { Text(recurrenceLabel(recurrence)) },
-                        )
-                    }
+                    // One-time work has no hosting occurrence; it is offered by
+                    // short-order templates only and never silently becomes DAILY.
+                    RecurrenceType.entries
+                        .filter { it != RecurrenceType.ONE_TIME }
+                        .forEach { recurrence ->
+                            FilterChip(
+                                selected = task.recurrence == recurrence,
+                                onClick = { onChange { it.copy(recurrence = recurrence) } },
+                                label = { Text(recurrenceLabel(recurrence)) },
+                            )
+                        }
                 }
                 when (task.recurrence) {
                     RecurrenceType.SELECTED_WEEKDAYS -> {
@@ -889,6 +975,12 @@ private fun TaskEditor(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
+                    RecurrenceType.ONE_TIME -> Text(
+                        text = "一次性任务没有游戏日期，只能用于短期单；请为托管任务选择周期。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+
                     RecurrenceType.DAILY -> Unit
                 }
             }
@@ -897,6 +989,7 @@ private fun TaskEditor(
 }
 
 private fun recurrenceLabel(type: RecurrenceType): String = when (type) {
+    RecurrenceType.ONE_TIME -> "一次性"
     RecurrenceType.DAILY -> "每日"
     RecurrenceType.WEEKLY -> "每周"
     RecurrenceType.SELECTED_WEEKDAYS -> "指定星期"

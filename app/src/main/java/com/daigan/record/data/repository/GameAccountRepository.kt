@@ -100,6 +100,7 @@ class DefaultGameAccountRepository @Inject constructor(
                 createdAt = now,
                 updatedAt = now,
                 archivedAt = null,
+                defaultTemplateId = normalized.defaultTemplateId,
             )
             accountDao.insert(entity)
             entity.toModel()
@@ -125,6 +126,7 @@ class DefaultGameAccountRepository @Inject constructor(
                 loginMethod = normalized.loginMethod,
                 // Switching to verification-code login clears the stored password.
                 password = normalized.password.takeIf { normalized.loginMethod == LoginMethod.PASSWORD && it.isNotBlank() },
+                defaultTemplateId = normalized.defaultTemplateId,
                 updatedAt = now,
             )
             existing.copy(
@@ -134,6 +136,7 @@ class DefaultGameAccountRepository @Inject constructor(
                 loginAccount = normalized.loginAccount,
                 loginMethod = normalized.loginMethod,
                 password = normalized.password.takeIf { normalized.loginMethod == LoginMethod.PASSWORD && it.isNotBlank() },
+                defaultTemplateId = normalized.defaultTemplateId,
                 updatedAt = now,
             ).toModel()
         }

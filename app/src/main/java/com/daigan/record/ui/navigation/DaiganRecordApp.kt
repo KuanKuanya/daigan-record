@@ -34,6 +34,8 @@ import com.daigan.record.feature.settings.PendingFeatureScreen
 import com.daigan.record.feature.settings.ReceiptHistoryScreen
 import com.daigan.record.feature.settings.SettingsScreen
 import com.daigan.record.feature.stats.StatsScreen
+import com.daigan.record.feature.templates.TemplateEditorScreen
+import com.daigan.record.feature.templates.TemplateLibraryScreen
 import com.daigan.record.feature.today.TodayScreen
 
 private data class MainDestination(
@@ -99,16 +101,37 @@ fun DaiganRecordApp(navController: NavHostController = rememberNavController()) 
                 SettingsScreen(
                     onBack = { navController.popBackStack() },
                     onOpenSection = { section ->
-                        if (section == SettingsSection.RECEIPTS) {
-                            navController.navigate(Routes.RECEIPTS)
-                        } else {
-                            navController.navigate(Routes.settingsSection(section))
+                        when (section) {
+                            SettingsSection.RECEIPTS -> navController.navigate(Routes.RECEIPTS)
+                            SettingsSection.TEMPLATES -> navController.navigate(Routes.TEMPLATES)
+                            else -> navController.navigate(Routes.settingsSection(section))
                         }
                     },
                 )
             }
             composable(Routes.RECEIPTS) {
                 ReceiptHistoryScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.TEMPLATES) {
+                TemplateLibraryScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreateTemplate = { navController.navigate(Routes.templateEditor()) },
+                    onEditTemplate = { templateId ->
+                        navController.navigate(Routes.templateEditor(templateId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.TEMPLATE_EDITOR,
+                arguments = listOf(
+                    navArgument(Routes.TEMPLATE_ID_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                TemplateEditorScreen(onDone = { navController.popBackStack() })
             }
             composable(
                 route = Routes.SETTINGS_PLACEHOLDER,

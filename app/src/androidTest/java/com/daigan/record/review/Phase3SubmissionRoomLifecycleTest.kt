@@ -74,6 +74,7 @@ class Phase3SubmissionRoomLifecycleTest {
             env.accountRepository,
             repository,
             env.clock,
+            env.templateRepository,
         )
         await("owner and account loaded") { !viewModel.uiState.value.loading }
         main {

@@ -1,15 +1,16 @@
 # 代肝记录
 
-面向个人游戏代肝从业者的离线 Android 应用。当前交付到 **Phase 3（订单、收款与统计）**：
-真实的 Room 持久化、老板/账号管理、短期与托管订单、打卡与补录、实收/欠款、
-收款更正审计、按月/全部统计，以及独立的收款明细页。
+面向个人游戏代肝从业者的离线 Android 应用。当前交付到 **Phase 4（游戏模板与模板文件交换）**：
+在 Phase 1–3 的老板/账号、短期与托管订单、打卡补录、实收/欠款、更正审计与统计之上，
+增加了可持久化编辑的游戏模板库、按模板建单的默认值，以及通过系统文档选择器完成的
+UTF-8 JSON 模板导入/导出。
 
 - 应用名：`代肝记录`
 - applicationId / namespace：`com.daigan.record`
 - minSdk 26，compileSdk / targetSdk 36
 - 全离线：Manifest 未声明 `INTERNET` 权限，Android 自动云备份与设备迁移均已关闭
 - 中文界面，跟随系统深浅色
-- 数据库版本 5（v1–v3 为只读历史 schema，v4 为 Phase 3 首版，v5 为当前版本）
+- 数据库版本 6（v1–v3 为只读历史 schema，v4/v5 为 Phase 3 历史版本，v6 为当前版本）
 
 ## 当前阶段能力
 
@@ -22,11 +23,18 @@
 | 收款与欠款：部分收款、一次结清、期次归属、补录/更正、审计 | 已实现 |
 | 数据统计：本月/全部实收、全部待收、待收明细、报表时区 | 已实现 |
 | 设置 → 收款明细：有效流水、替换/作废与更正记录 | 已实现 |
-| 游戏模板、提醒设置、备份与恢复 | 明确显示待实现，不属于本阶段 |
+| 设置 → 游戏模板：列表、分类/任务编辑、默认值 | 已实现（Phase 4，Room 持久化） |
+| 模板文件：系统文档选择器导入预览、同名替换/另存为、导出 | 已实现（Phase 4） |
+| 账号默认模板与建单模板预填（任务、刷新规则、来源快照） | 已实现（可选，不强制） |
+| 提醒设置、备份与恢复 | 明确显示待实现，不属于本阶段 |
 | 云服务、发布签名、导出分享 | 未实现（不在本阶段范围） |
 
 金额一律为整数分存储与计算，不使用浮点。约定价格不会自动变成“已收款”：
 只有用户实际录入的收款才计入实收。
+
+模板只是**新建订单时的默认值**：建单时把任务、刷新规则和模板来源复制成订单自己的快照。
+之后编辑、替换、导入覆盖或删除模板，都不会改动已有订单、价格、打卡、收款或历史日期归属。
+模板 JSON 是单模板交换格式，不是业务数据备份。
 
 ## 幂等与时间契约
 
@@ -56,7 +64,8 @@ git diff --check
 app/src/main/java/com/daigan/record/
 ├── core/time/          时间源、游戏日历、报表时区/窗口、毫秒精度常量
 ├── data/local/         Room 实体、DAO、数据库、类型转换器、迁移
-├── data/model/         领域模型、金额、余额、收款、统计、表单校验、命令指纹
+├── data/model/         领域模型、金额、余额、收款、统计、模板、表单校验、命令指纹
+├── data/template/      模板 JSON 编解码、内置资产、SAF 文件读写
 ├── data/repository/    Repository 实现、ReceiptLedger、LedgerSnapshotSource
 ├── data/di/            Hilt 绑定
 ├── feature/accounts/   老板与账号列表、详情、表单、归档
@@ -64,6 +73,7 @@ app/src/main/java/com/daigan/record/
 ├── feature/today/      今日事项
 ├── feature/stats/      数据统计（月/全部）
 ├── feature/settings/   独立设置页、收款明细页
+├── feature/templates/  模板库、模板编辑器、导入预览
 └── ui/                 主题、导航、通用组件
 ```
 
@@ -75,8 +85,11 @@ app/src/main/java/com/daigan/record/
 - 架构补充：`docs/superpowers/plans/2026-10-17-architecture-foundation.md`
 - 上游底座：`docs/upstream-foundation.md`
 - 数据模型（含 v4/v5 迁移与收款语义）：`docs/data-model.md`
-- 阶段交接：`docs/handoffs/phase-3.md`、`docs/handoffs/phase-3-fix-1.md`
-- 历史交接：`docs/handoffs/phase-1.md`、`docs/handoffs/phase-2.md`
+- 阶段交接：`docs/handoffs/phase-4.md`
+- 历史交接：`docs/handoffs/phase-1.md`、`docs/handoffs/phase-2.md`、
+  `docs/handoffs/phase-3.md`、`docs/handoffs/phase-3-fix-1.md`、`docs/handoffs/phase-3-fix-2.md`
+- 模板内容来源与核实：`docs/game-template-sources.md`
+- 模板文件格式：`docs/template-file-format.md`
 
 ## 上游来源与许可
 

@@ -1,7 +1,8 @@
-# 数据模型（Phase 1 + Phase 2 + Phase 3 已实现）
+# 数据模型（Phase 1 + Phase 2 + Phase 3 + Phase 4 已实现）
 
 Room/SQLite 是业务资料唯一事实来源。本文件只描述**已经实现并经过迁移测试**的表；
-游戏模板库、提醒与备份仍属于后续阶段，未创建空表，也没有占位实现。
+提醒与备份仍属于后续阶段，未创建空表，也没有占位实现。游戏模板库自 Phase 4 起是真实
+持久化表，但只是**新建订单时的默认值**，不是业务记录的事实来源。
 
 Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`。
 
@@ -11,11 +12,12 @@ Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`
 | 2 | `2.json` | **只读历史夹具**，Phase 1 验收基线 |
 | 3 | `3.json` | **只读历史夹具**，Phase 2 验收基线 |
 | 4 | `4.json` | 历史版本：Phase 3 首版收款表 |
-| 5 | `5.json` | 当前生产版本（Phase 3 修复） |
+| 5 | `5.json` | 历史版本：Phase 3 验收基线 |
+| 6 | `6.json` | 当前生产版本（Phase 4 模板库与来源列） |
 
 `exportSchema = true`，没有 `fallbackToDestructiveMigration`。生产构建通过
 `RecordDatabase.ALL_MIGRATIONS` 注册 `MIGRATION_1_2`、`MIGRATION_2_3`、
-`MIGRATION_3_4` 与 `MIGRATION_4_5`。
+`MIGRATION_3_4`、`MIGRATION_4_5` 与 `MIGRATION_5_6`。
 
 类型转换器：
 
@@ -68,7 +70,7 @@ Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`
 - 重复归档/恢复幂等，不重写时间戳或批次。
 - 老板归档期间，其账号写入一律在同一事务中拒绝。
 
-Phase 2 新增的**归档守卫**（见第 4 节）在归档老板/账号时要求没有未完成短期单，
+Phase 2 新增的**归档守卫**（见第 5 节）在归档老板/账号时要求没有未完成短期单，
 且没有未到期托管期。
 
 ## 2. Phase 2 表（数据库版本 3）
@@ -266,7 +268,95 @@ Phase 2 新增的**归档守卫**（见第 4 节）在归档老板/账号时要�
 - `receivedAt` 是**实际到账**时间，允许历史值；`now` 只用于“不能晚于当前时间”的
   校验与 `createdAt` 录入时间。
 
-## 4. 日期与周期语义（实现于 `core/time/GameCalendar.kt`、`data/model/OccurrenceRules.kt`）
+## 4. Phase 4 表（数据库版本 6）
+
+模板库是“创建时的默认值”，不是业务记录。订单在创建时把自己的任务、刷新规则与
+模板来源复制成独立快照，**没有任何业务表通过外键引用模板**，因此修改、替换、导入覆盖
+或删除模板都不会改动已有订单、价格、打卡、收款或历史日期归属。
+
+### `game_templates`
+
+| 列 | 类型 | 约束 / 语义 |
+|---|---|---|
+| `id` | TEXT | 主键；内置模板使用资产中的稳定 ID |
+| `gameName` | TEXT | 非空；1–40 字符 |
+| `templateVersion` | TEXT | 非空；由用户维护，例如 `2026.10` |
+| `gameVersionNotes` | TEXT | 可空；适用版本与“未核实/示例”说明 |
+| `zoneId` | TEXT | 非空；IANA 时区 |
+| `dailyRefreshMinutes` | INTEGER | 非空；距零点分钟 |
+| `weeklyRefreshDay` | INTEGER | 非空；ISO 1–7 |
+| `weeklyRefreshMinutes` | INTEGER | 非空 |
+| `origin` | TEXT | `BUILT_IN` / `USER` / `IMPORTED` |
+| `builtInKey` | TEXT | 可空；唯一索引；内置模板的稳定种子标识 |
+| `sortOrder` | INTEGER | 非空；稳定的库内顺序（内置为 0/1/2） |
+| `createdAt` / `updatedAt` | INTEGER | 非空 |
+
+`index_game_templates_builtInKey` 唯一索引让重复初始化不可能写入第二份内置模板。
+`sortOrder` 只影响列表顺序，不参与业务判断。
+
+### `template_categories`
+
+| 列 | 类型 | 约束 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `templateId` | TEXT | → `game_templates.id`，`RESTRICT`，索引 |
+| `name` | TEXT | 非空；1–30 字符 |
+| `sortOrder` | INTEGER | 非空 |
+
+### `template_tasks`
+
+| 列 | 类型 | 约束 / 语义 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `templateId` | TEXT | → `game_templates.id`，`RESTRICT`，索引 |
+| `categoryId` | TEXT | → `template_categories.id`，`RESTRICT`，索引 |
+| `title` | TEXT | 非空；1–40 字符 |
+| `progressType` | TEXT | `CHECKBOX` / `NUMERIC` |
+| `startValue` / `targetValue` | TEXT | 精确十进制；≤ 3 位小数；目标大于起始 |
+| `unit` | TEXT | 可空；≤ 10 字符 |
+| `recurrence` | TEXT | `ONE_TIME` / `DAILY` / `WEEKLY` / `SELECTED_WEEKDAYS` / `EVERY_N_DAYS` |
+| `weekdays` | TEXT | 可空；ISO 星期号逗号分隔 |
+| `everyNDays` | INTEGER | 可空；1–365 |
+| `sortOrder` | INTEGER | 非空 |
+
+**`ONE_TIME` 的语义**：模板中的一次性任务只适用于短期单。它没有发生记录，也不会被
+映射成 `DAILY`；托管订单在创建时只取周期任务，若模板没有周期任务则明确提示，不静默
+改写。短期订单的任务保存 `ONE_TIME`，但短期单本来就不生成发生记录，因此不影响既有
+的打卡语义。
+
+### `template_seed_state`
+
+| 列 | 类型 | 约束 |
+|---|---|---|
+| `seedKey` | TEXT | 主键；内置模板的稳定键（`reverse-1999` / `wuthering-waves` / `generic`） |
+| `appliedAt` | INTEGER | 非空 |
+
+初始化只对“没有标记”的键执行一次。标记在模板被用户删除后仍然保留，因此下次启动
+**不会复活**已删除的内置模板，也不会覆盖用户编辑过的内容。
+
+### 业务表中的模板相关列（全部可空）
+
+| 表 | 列 | 语义 |
+|---|---|---|
+| `game_accounts` | `defaultTemplateId` | 新建订单时预选的模板；**不是外键**。删除模板时在同一事务内清空；悬空值按“无默认模板”处理 |
+| `orders` | `sourceTemplateId` | 创建时选用的模板 ID（纯文本，不是外键） |
+| `orders` | `sourceTemplateName` | 创建时的游戏名称快照 |
+| `orders` | `sourceTemplateVersion` | 创建时的模板版本快照 |
+
+历史订单/账号保持 NULL：不伪造模板版本，也不强制重新绑定模板。模板来源只是说明性
+标签，不参与价格、完成、续期或日历计算；命令指纹也**不包含**它，因此进程恢复后的
+重试仍是同一条建单命令。
+
+### 模板与订单的快照边界
+
+- 应用模板只填充**表单默认值**：任务草稿、时区、每日/每周刷新时间。
+- 建单事务把任务写入 `task_definitions`、刷新规则写入 `orders` / `hosting_periods`，
+  并写入上面的来源列；模板行不参与订单读取。
+- 续期从旧期任务复制新 ID 的任务快照，与模板无关。
+- 编辑/替换/删除模板不会产生任何针对订单、期次、发生记录、收款或附件的写操作。
+- 删除模板只会删除模板内容、清空账号的 `defaultTemplateId`，并保留 `template_seed_state`。
+
+## 5. 日期与周期语义（实现于 `core/time/GameCalendar.kt`、`data/model/OccurrenceRules.kt`）
 
 三个概念严格区分：
 
@@ -300,7 +390,7 @@ Phase 2 新增的**归档守卫**（见第 4 节）在归档老板/账号时要�
 - 刷新后续期：新期从当天游戏日开始。
 - 任何情况下都只生成 `startDate` 及之后的发生记录，不会回溯到旧期或新期开始日前。
 
-## 5. 仓储接口与事务边界
+## 6. 仓储接口与事务边界
 
 ```kotlin
 interface OrderRepository {
@@ -357,6 +447,33 @@ interface StatisticsRepository {
 class LedgerSnapshotSource {
     fun observe(): Flow<LedgerSnapshot>
     suspend fun load(): LedgerSnapshot
+}
+
+interface GameTemplateRepository {
+    fun observeLibrary(): Flow<List<GameTemplateSummary>>
+    fun observeTemplate(templateId: String): Flow<GameTemplate?>
+
+    suspend fun findTemplate(templateId: String): GameTemplate?
+    suspend fun findAllSummaries(): List<GameTemplateSummary>
+    suspend fun findNameConflict(gameName: String): GameTemplateSummary?
+
+    /** Installs missing built-ins once per durable seed key. */
+    suspend fun ensureBuiltInTemplates()
+
+    suspend fun saveTemplate(draft: TemplateDraft, templateId: String? = null): String
+    suspend fun deleteTemplate(templateId: String)
+
+    /** All-or-nothing: validation happens before the single write transaction. */
+    suspend fun importTemplate(
+        content: TemplateFileContent,
+        resolution: TemplateImportResolution,
+    ): ImportedTemplate
+}
+
+/** SAF document streams; the ViewModel never touches a ContentResolver or a File. */
+interface TemplateFileRepository {
+    suspend fun read(uri: Uri, maxBytes: Int = TemplateFileCodec.MAX_FILE_BYTES): ByteArray
+    suspend fun write(uri: Uri, bytes: ByteArray)
 }
 ```
 
@@ -420,7 +537,7 @@ class LedgerSnapshotSource {
 - 归档只影响“工作写入”，不影响读模型与收款；已完成/已到期/已归档订单的欠款
   仍在待收列表中，并可继续收款。
 
-## 6. 截图文件与失败处理
+## 7. 截图文件与失败处理
 
 - 来源：`ActivityResultContracts.PickVisualMedia`（系统照片选择器），不申请宽泛存储权限。
 - 流程：读取 `contentResolver` → 写入 `files/attachments/<uuid>.tmp` → 移动/复制为
@@ -432,7 +549,7 @@ class LedgerSnapshotSource {
 - 取消选择（`null` URI）或来源不可读：不写任何行，不产生“成功但损坏”的附件。
 - 清理只删除未被引用的最终文件与超过 1 小时的临时文件。
 
-## 7. 迁移与测试
+## 8. 迁移与测试
 
 - `MIGRATION_1_2`：两条 `ALTER TABLE ... ADD COLUMN archiveBatchId TEXT`，不重写数据。
 - `MIGRATION_2_3`：创建 7 张 Phase 2 表、全部显式命名索引与外键；不修改任何旧行。
@@ -440,6 +557,10 @@ class LedgerSnapshotSource {
   `replacedByReceiptId` 索引）。**不插入任何收款行**：历史订单的约定价格不等于已收。
 - `MIGRATION_4_5`：只创建 `order_creation_operations`（唯一索引 + 指向 `orders` 的
   `RESTRICT` 外键）。**不为历史订单补写**操作行。
+- `MIGRATION_5_6`：创建 `game_templates`、`template_categories`、`template_tasks`、
+  `template_seed_state` 及唯一/普通索引、外键；给 `game_accounts` 加可空
+  `defaultTemplateId`，给 `orders` 加三个可空来源列。**不插入任何模板内容**，不重写
+  历史订单/账号；内置模板由仓储按种子标记安装。
 - `MigrationV1ToV2Test`：用提交的 `1.json` 建 v1 库，写入真实行，执行全部迁移到当前
   版本；编号、凭据、归档时间保留，批次列为 NULL；生产同款 builder 打开旧库。
 - `MigrationV2ToV3Test`：用提交的 `2.json` 建 v2 库，含显式 `archiveBatchId`；升级后
@@ -447,14 +568,26 @@ class LedgerSnapshotSource {
 - `MigrationV3ToV5Test`：用提交的 `3.json` 建 v3 库，写入真实老板、账号、短期/托管
   订单、期次、任务、发生记录、完成批次/明细与附件引用；升级后逐项保留，三类新表为空，
   新外键生效。另有 `4.json` → v5 用例，确认既有订单不会得到虚构的建单操作行。
+- `MigrationV5ToV6Test`：用提交的 `5.json` 建 v5 库，写入 Phase 3 的老板、账号、
+  短期/托管订单、期次、任务、发生记录、完成批次、附件、有效收款、更正审计与建单操作行；
+  升级后逐项保留，四张模板表为空，历史订单来源列为 NULL、账号默认模板为 NULL。
+  另有“模板删除不影响订单”的真实 SQL 用例。
 - `MigrationInfrastructureTest`：遍历 1..当前版本的所有导出 schema，升级并校验数据。
 - 真实 Room 测试见 `OrderRepositoryTest`、`HostingOccurrenceTest`、
   `BatchCompletionTest`、`RenewalTest`、`AttachmentTest`、
   `Phase3FinancialContractTest`、`LedgerSnapshotConsistencyTest` 与
   `Phase3AcceptanceReviewTest`。
+- Phase 4 模板测试：`GameTemplateRepositoryTest`（初始化幂等、编辑保留、删除不复活、
+  重启持久化、账号默认清理、同名另存/替换、非法导入零写入、ID 冲突重映射）、
+  `TemplateOrderSnapshotTest`（三款内置模板各建托管/短期单、完成任务、编辑/替换/删除后
+  订单快照不变、旧账号旧订单无需模板）、`BuiltInTemplateContentTest`（资产可解析、
+  顺序、刷新时刻、五种周期）、`TemplateFileExchangeTest`（UTF-8 往返、超限、不可读文档）。
+- JVM：`TemplateDraftTest`、`TemplateFileCodecTest`、`NewOrderTemplateDefaultsTest`、
+  `AccountTemplateSelectionTest`。
 
-## 8. 尚未实现（不是本阶段的隐含承诺）
+## 9. 尚未实现（不是本阶段的隐含承诺）
 
-- 游戏模板库、模板编辑/导入导出（Phase 4）。当前刷新规则是用户自填的临时值。
 - 系统通知/提醒、备份与恢复、加密、应用锁（后续阶段/产品明确不需要）。
-- 导出/分享报表、跨设备同步、云服务与发布签名（不在 Phase 3 范围）。
+- 模板文件是单个模板的交换格式，**不是业务备份**；完整备份/恢复仍待实现。
+- 模板在线商店、自动从网络更新模板、跨设备同步、导出/分享报表、云服务与发布签名。
+- 深眠域等“双周”或“每月两次”的节奏没有专用周期类型；只能用可编辑的周期近似。

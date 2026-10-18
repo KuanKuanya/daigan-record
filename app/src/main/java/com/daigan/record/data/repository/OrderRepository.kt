@@ -573,6 +573,9 @@ class DefaultOrderRepository @Inject constructor(
                     createdAt = now,
                     updatedAt = now,
                     completedAt = null,
+                    sourceTemplateId = draft.sourceTemplate?.templateId,
+                    sourceTemplateName = draft.sourceTemplate?.gameName,
+                    sourceTemplateVersion = draft.sourceTemplate?.templateVersion,
                 ),
             )
             draft.tasks.forEachIndexed { index, task ->
@@ -625,6 +628,9 @@ class DefaultOrderRepository @Inject constructor(
                     createdAt = now,
                     updatedAt = now,
                     completedAt = null,
+                    sourceTemplateId = draft.sourceTemplate?.templateId,
+                    sourceTemplateName = draft.sourceTemplate?.gameName,
+                    sourceTemplateVersion = draft.sourceTemplate?.templateVersion,
                 ),
             )
             orderDao.insertPeriod(

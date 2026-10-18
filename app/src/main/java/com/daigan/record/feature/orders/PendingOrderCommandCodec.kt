@@ -37,6 +37,13 @@ internal data class RestoredOrderForm(
     val initialAmountYuan: String,
     val initialChannel: PaymentChannel,
     val initialNote: String,
+    /**
+     * Template provenance as it was shown when the command was submitted. Optional and
+     * absent in payloads written before Phase 4, so decoding stays backward compatible.
+     */
+    val sourceTemplateId: String? = null,
+    val sourceTemplateName: String? = null,
+    val sourceTemplateVersion: String? = null,
 )
 
 /**
@@ -97,6 +104,9 @@ internal object PendingOrderCommandCodec {
         put("initialAmountYuan", form.initialAmountYuan)
         put("initialChannel", form.initialChannel.name)
         put("initialNote", form.initialNote)
+        put("sourceTemplateId", form.sourceTemplateId)
+        put("sourceTemplateName", form.sourceTemplateName)
+        put("sourceTemplateVersion", form.sourceTemplateVersion)
         put("creationOperationId", creationOperationId)
         put("initialPaymentOperationId", initialPaymentOperationId)
         put("initialReceivedAtMillis", initialReceivedAtMillis.toString())
@@ -152,6 +162,10 @@ internal object PendingOrderCommandCodec {
                 initialAmountYuan = text("initialAmountYuan"),
                 initialChannel = PaymentChannel.valueOf(text("initialChannel")),
                 initialNote = text("initialNote"),
+                // Optional keys: a v1 payload written before Phase 4 simply has none.
+                sourceTemplateId = optional("sourceTemplateId"),
+                sourceTemplateName = optional("sourceTemplateName"),
+                sourceTemplateVersion = optional("sourceTemplateVersion"),
             ),
             creationOperationId = text("creationOperationId"),
             initialPaymentOperationId = text("initialPaymentOperationId"),

@@ -114,7 +114,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     // Upgrades the transitively pinned kotlinx-serialization-core so the generated
     // serializers used by room-testing (androidTest) link against the same runtime.
-    implementation(libs.kotlinx.serialization.core)
+    // The JSON runtime is also used by the Phase 4 template file codec; no compiler
+    // plugin is applied because the tree is built with explicit JsonObject builders.
+    implementation(libs.kotlinx.serialization.json)
 
     // Compose
     implementation(libs.androidx.compose.ui)

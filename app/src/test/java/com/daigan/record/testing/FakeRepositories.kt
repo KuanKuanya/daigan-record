@@ -53,6 +53,7 @@ fun account(
     password: String? = "demo1999",
     archived: Boolean = false,
     archivedWithOwner: Boolean = false,
+    defaultTemplateId: String? = null,
 ): GameAccount = GameAccount(
     id = id,
     ownerId = ownerId,
@@ -65,6 +66,7 @@ fun account(
     createdAt = fixedInstant,
     archived = archived,
     archivedWithOwner = archivedWithOwner,
+    defaultTemplateId = defaultTemplateId,
 )
 
 class FakeOwnerRepository : OwnerRepository {
@@ -131,6 +133,7 @@ class FakeGameAccountRepository : GameAccountRepository {
             gameName = draft.gameName,
             loginMethod = draft.loginMethod,
             password = draft.password.ifEmpty { null },
+            defaultTemplateId = draft.defaultTemplateId,
         )
         accountsById[entity.id] = entity
         return entity
@@ -142,6 +145,7 @@ class FakeGameAccountRepository : GameAccountRepository {
             gameName = draft.gameName,
             loginMethod = draft.loginMethod,
             password = draft.password.ifEmpty { null },
+            defaultTemplateId = draft.defaultTemplateId,
         )
         accountsById[accountId] = updated
         return updated
@@ -150,6 +154,131 @@ class FakeGameAccountRepository : GameAccountRepository {
     override suspend fun archiveAccount(accountId: String) = Unit
 
     override suspend fun restoreAccount(accountId: String) = Unit
+}
+
+/**
+ * Template library fake for ViewModel tests.
+ *
+ * It mirrors the real contract that matters to the ViewModels: built-ins are installed
+ * once, a saved template keeps its id, and an import with save-as gets a new name.
+ */
+class FakeGameTemplateRepository : com.daigan.record.data.repository.GameTemplateRepository {
+    val library = MutableStateFlow<List<com.daigan.record.data.model.GameTemplateSummary>>(emptyList())
+    val templatesById = mutableMapOf<String, com.daigan.record.data.model.GameTemplate>()
+    var ensureCalls = 0
+    var saveCalls = 0
+    var deleted = mutableListOf<String>()
+
+    fun put(template: com.daigan.record.data.model.GameTemplate) {
+        templatesById[template.id] = template
+        val tasks = template.tasks
+        val summary = com.daigan.record.data.model.GameTemplateSummary(
+            id = template.id,
+            gameName = template.gameName,
+            templateVersion = template.templateVersion,
+            gameVersionNotes = template.gameVersionNotes,
+            refresh = template.refresh,
+            origin = template.origin,
+            categoryCount = template.categories.size,
+            taskCount = tasks.size,
+            hostingTaskCount = tasks.count {
+                it.recurrence != com.daigan.record.data.model.RecurrenceType.ONE_TIME
+            },
+            shortTaskCount = tasks.count {
+                it.recurrence == com.daigan.record.data.model.RecurrenceType.ONE_TIME
+            },
+        )
+        library.value = library.value.filterNot { it.id == summary.id } + summary
+    }
+
+    override fun observeLibrary(): Flow<List<com.daigan.record.data.model.GameTemplateSummary>> =
+        library
+
+    override fun observeTemplate(
+        templateId: String,
+    ): Flow<com.daigan.record.data.model.GameTemplate?> =
+        library.map { templatesById[templateId] }
+
+    override suspend fun findTemplate(
+        templateId: String,
+    ): com.daigan.record.data.model.GameTemplate? = templatesById[templateId]
+
+    override suspend fun findAllSummaries(): List<com.daigan.record.data.model.GameTemplateSummary> =
+        library.value
+
+    override suspend fun findNameConflict(
+        gameName: String,
+    ): com.daigan.record.data.model.GameTemplateSummary? = library.value.firstOrNull {
+        com.daigan.record.data.template.TemplateNames.normalize(it.gameName) ==
+            com.daigan.record.data.template.TemplateNames.normalize(gameName)
+    }
+
+    override suspend fun ensureBuiltInTemplates() {
+        ensureCalls += 1
+    }
+
+    override suspend fun saveTemplate(
+        draft: com.daigan.record.data.model.TemplateDraft,
+        templateId: String?,
+    ): String {
+        saveCalls += 1
+        val id = templateId ?: "template-${saveCalls}"
+        val now = fixedInstant
+        val template = com.daigan.record.data.model.GameTemplate(
+            id = id,
+            gameName = draft.gameName,
+            templateVersion = draft.templateVersion,
+            gameVersionNotes = draft.gameVersionNotes.ifBlank { null },
+            refresh = com.daigan.record.data.model.GameRefreshRulesDomain(
+                zoneId = java.time.ZoneId.of(draft.zoneText),
+                dailyRefresh = draft.dailyRefresh,
+                weeklyRefreshDay = draft.weeklyRefreshDay,
+                weeklyRefreshTime = draft.weeklyRefreshTime,
+            ),
+            origin = templateId?.let { templatesById[it]?.origin }
+                ?: com.daigan.record.data.model.TemplateOrigin.USER,
+            builtInKey = null,
+            createdAt = now,
+            updatedAt = now,
+            categories = draft.categories.mapIndexed { categoryIndex, category ->
+                com.daigan.record.data.model.TemplateCategory(
+                    id = category.id,
+                    templateId = id,
+                    name = category.name,
+                    sortOrder = categoryIndex,
+                    tasks = category.tasks.mapIndexed { taskIndex, task ->
+                        com.daigan.record.data.model.TemplateTask(
+                            id = task.id,
+                            templateId = id,
+                            categoryId = category.id,
+                            title = task.title,
+                            progressType = task.progressType,
+                            startValue = task.startDecimal() ?: java.math.BigDecimal.ZERO,
+                            targetValue = task.targetDecimal() ?: java.math.BigDecimal.ONE,
+                            unit = task.unit.ifBlank { null },
+                            recurrence = task.recurrence,
+                            weekdays = task.weekdays,
+                            everyNDays = task.everyNOrNull(),
+                            sortOrder = taskIndex,
+                        )
+                    },
+                )
+            },
+        )
+        put(template)
+        return id
+    }
+
+    override suspend fun deleteTemplate(templateId: String) {
+        deleted += templateId
+        templatesById.remove(templateId)
+        library.value = library.value.filterNot { it.id == templateId }
+    }
+
+    override suspend fun importTemplate(
+        content: com.daigan.record.data.template.TemplateFileContent,
+        resolution: com.daigan.record.data.repository.TemplateImportResolution,
+    ): com.daigan.record.data.repository.ImportedTemplate = error("not used by ViewModel tests")
 }
 
 /** Exposes the repository flows for assertions without extra test utilities. */

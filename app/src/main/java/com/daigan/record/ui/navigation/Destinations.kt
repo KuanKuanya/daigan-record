@@ -8,6 +8,8 @@ object Routes {
 
     const val SETTINGS = "settings"
     const val RECEIPTS = "settings/receipts"
+    const val TEMPLATES = "settings/templates"
+    const val TEMPLATE_EDITOR = "settings/templates/editor?templateId={templateId}"
     const val SETTINGS_PLACEHOLDER = "settings/pending/{section}"
 
     const val ARCHIVED = "accounts/archived"
@@ -24,6 +26,7 @@ object Routes {
     const val ORDER_ID_ARG = "orderId"
     const val PERIOD_ID_ARG = "periodId"
     const val SECTION_ARG = "section"
+    const val TEMPLATE_ID_ARG = "templateId"
 
     val mainDestinations = setOf(TODAY, ACCOUNTS, STATS)
 
@@ -44,6 +47,9 @@ object Routes {
         "orders/$orderId/backfill?periodId=$periodId"
 
     fun settingsSection(section: SettingsSection): String = "settings/pending/${section.key}"
+
+    fun templateEditor(templateId: String? = null): String =
+        "settings/templates/editor?templateId=${templateId.orEmpty()}"
 }
 
 /**
@@ -66,7 +72,7 @@ enum class SettingsSection(
         key = "templates",
         title = "游戏模板",
         summary = "编辑、导入与导出模板",
-        pendingMessage = "游戏模板的编辑与文件导入导出将在第四阶段实现。",
+        pendingMessage = "游戏模板已在本版本提供。",
     ),
     REMINDERS(
         key = "reminders",

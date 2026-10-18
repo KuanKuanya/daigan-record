@@ -7,6 +7,7 @@ import com.daigan.record.data.model.AccountDraft
 import com.daigan.record.data.model.LoginMethod
 import com.daigan.record.data.repository.ARCHIVED_OWNER_ACCOUNT_MESSAGE
 import com.daigan.record.data.repository.GameAccountRepository
+import com.daigan.record.data.repository.GameTemplateRepository
 import com.daigan.record.data.repository.OwnerRepository
 import com.daigan.record.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ class AccountFormViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     ownerRepository: OwnerRepository,
     private val accountRepository: GameAccountRepository,
+    private val templateRepository: GameTemplateRepository,
 ) : ViewModel() {
 
     private val ownerId: String = checkNotNull(savedStateHandle[Routes.OWNER_ID_ARG]) {
@@ -41,16 +43,48 @@ class AccountFormViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // The library is a creation default only; an account never requires one.
+            runCatching { templateRepository.ensureBuiltInTemplates() }
+            val templates = runCatching { templateRepository.findAllSummaries() }
+                .getOrDefault(emptyList())
             val owner = ownerRepository.findOwner(ownerId)
             val account = accountId?.let { accountRepository.findAccount(it) }
             _uiState.update { state ->
+                val draft = account?.let(AccountDraft::from) ?: state.draft
+                val selected = templates.firstOrNull { it.id == draft.defaultTemplateId }
                 state.copy(
                     isLoading = false,
                     ownerNickname = owner?.nickname,
                     ownerArchived = owner?.archived == true,
-                    draft = account?.let(AccountDraft::from) ?: state.draft,
+                    draft = if (selected == null) draft.copy(defaultTemplateId = null) else draft,
+                    templates = templates,
+                    templateName = selected?.label,
                 )
             }
+        }
+    }
+
+    /**
+     * Choosing a template stores it as this account's creation default and fills an empty
+     * game name. Existing typed text is never overwritten; the user can clear the choice
+     * at any time and existing orders are unaffected.
+     */
+    fun selectTemplate(templateId: String?) {
+        _uiState.update { state ->
+            val template = templateId?.let { id -> state.templates.firstOrNull { it.id == id } }
+            state.copy(
+                draft = state.draft.copy(
+                    defaultTemplateId = template?.id,
+                    gameName = if (template != null && state.draft.gameName.isBlank()) {
+                        template.gameName
+                    } else {
+                        state.draft.gameName
+                    },
+                ),
+                templateName = template?.label,
+                errors = emptyMap(),
+                saveError = null,
+            )
         }
     }
 

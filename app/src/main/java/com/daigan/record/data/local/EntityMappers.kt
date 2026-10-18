@@ -66,6 +66,9 @@ fun OrderEntity.toModel(): Order = Order(
     ),
     createdAt = createdAt,
     completedAt = completedAt,
+    sourceTemplateId = sourceTemplateId,
+    sourceTemplateName = sourceTemplateName,
+    sourceTemplateVersion = sourceTemplateVersion,
 )
 
 fun HostingPeriodEntity.toModel(): HostingPeriod = HostingPeriod(

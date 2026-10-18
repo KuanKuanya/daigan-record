@@ -50,6 +50,7 @@ interface GameAccountDao {
             loginAccount = :loginAccount,
             loginMethod = :loginMethod,
             password = :password,
+            defaultTemplateId = :defaultTemplateId,
             updatedAt = :updatedAt
         WHERE id = :accountId
         """
@@ -62,6 +63,7 @@ interface GameAccountDao {
         loginAccount: String,
         loginMethod: LoginMethod,
         password: String?,
+        defaultTemplateId: String?,
         updatedAt: Instant,
     )
 

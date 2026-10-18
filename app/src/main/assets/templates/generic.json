@@ -1,0 +1,133 @@
+{
+  "format": "daigan-template",
+  "formatVersion": 1,
+  "template": {
+    "id": "tpl-generic",
+    "gameName": "通用模板",
+    "templateVersion": "1.0",
+    "gameVersionNotes": "通用示例，不代表任何具体游戏的官方规则；所有条目与时间都可自行修改。",
+    "timeZone": "Asia/Shanghai",
+    "dailyRefresh": "04:00",
+    "weeklyRefreshDay": "MONDAY",
+    "weeklyRefreshTime": "05:00",
+    "categories": [
+      {
+        "id": "cat-generic-daily",
+        "name": "日常",
+        "tasks": [
+          {
+            "id": "task-generic-checkin",
+            "categoryId": "cat-generic-daily",
+            "title": "每日签到",
+            "progressType": "CHECKBOX",
+            "startValue": "0",
+            "targetValue": "1",
+            "unit": null,
+            "recurrence": "DAILY",
+            "weekdays": [],
+            "everyNDays": null
+          },
+          {
+            "id": "task-generic-daily-mission",
+            "categoryId": "cat-generic-daily",
+            "title": "完成每日任务",
+            "progressType": "CHECKBOX",
+            "startValue": "0",
+            "targetValue": "1",
+            "unit": null,
+            "recurrence": "DAILY",
+            "weekdays": [],
+            "everyNDays": null
+          },
+          {
+            "id": "task-generic-stamina",
+            "categoryId": "cat-generic-daily",
+            "title": "消耗体力",
+            "progressType": "NUMERIC",
+            "startValue": "0",
+            "targetValue": "100",
+            "unit": "体力",
+            "recurrence": "DAILY",
+            "weekdays": [],
+            "everyNDays": null
+          }
+        ]
+      },
+      {
+        "id": "cat-generic-cycle",
+        "name": "周期任务",
+        "tasks": [
+          {
+            "id": "task-generic-weekly",
+            "categoryId": "cat-generic-cycle",
+            "title": "每周任务",
+            "progressType": "CHECKBOX",
+            "startValue": "0",
+            "targetValue": "1",
+            "unit": null,
+            "recurrence": "WEEKLY",
+            "weekdays": [],
+            "everyNDays": null
+          },
+          {
+            "id": "task-generic-weekend",
+            "categoryId": "cat-generic-cycle",
+            "title": "周末副本",
+            "progressType": "CHECKBOX",
+            "startValue": "0",
+            "targetValue": "1",
+            "unit": null,
+            "recurrence": "SELECTED_WEEKDAYS",
+            "weekdays": [
+              "SATURDAY",
+              "SUNDAY"
+            ],
+            "everyNDays": null
+          },
+          {
+            "id": "task-generic-every-two-days",
+            "categoryId": "cat-generic-cycle",
+            "title": "隔日清理",
+            "progressType": "CHECKBOX",
+            "startValue": "0",
+            "targetValue": "1",
+            "unit": null,
+            "recurrence": "EVERY_N_DAYS",
+            "weekdays": [],
+            "everyNDays": 2
+          }
+        ]
+      },
+      {
+        "id": "cat-generic-commission",
+        "name": "短期委托",
+        "tasks": [
+          {
+            "id": "task-generic-once",
+            "categoryId": "cat-generic-commission",
+            "title": "一次性委托",
+            "progressType": "CHECKBOX",
+            "startValue": "0",
+            "targetValue": "1",
+            "unit": null,
+            "recurrence": "ONE_TIME",
+            "weekdays": [],
+            "everyNDays": null
+          },
+          {
+            "id": "task-generic-progress",
+            "categoryId": "cat-generic-commission",
+            "title": "累计进度",
+            "progressType": "NUMERIC",
+            "startValue": "0",
+            "targetValue": "10",
+            "unit": "次",
+            "recurrence": "ONE_TIME",
+            "weekdays": [],
+            "everyNDays": null
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -12,6 +12,7 @@ import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
 import com.daigan.record.data.local.dao.ReceiptDao
 import com.daigan.record.data.local.dao.TaskDao
+import com.daigan.record.data.local.dao.TemplateDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -60,4 +61,7 @@ object DatabaseModule {
     @Provides
     fun provideCreationOperationDao(database: RecordDatabase): CreationOperationDao =
         database.creationOperationDao()
+
+    @Provides
+    fun provideTemplateDao(database: RecordDatabase): TemplateDao = database.templateDao()
 }

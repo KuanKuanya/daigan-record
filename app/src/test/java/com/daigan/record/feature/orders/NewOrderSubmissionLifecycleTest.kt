@@ -6,6 +6,7 @@ import com.daigan.record.data.model.OrderType
 import com.daigan.record.data.model.ShortOrderDraft
 import com.daigan.record.data.repository.OrderRepository
 import com.daigan.record.testing.FakeGameAccountRepository
+import com.daigan.record.testing.FakeGameTemplateRepository
 import com.daigan.record.testing.FakeOrderRepository
 import com.daigan.record.testing.FakeOwnerRepository
 import com.daigan.record.testing.FixedTimeProvider
@@ -87,6 +88,7 @@ class NewOrderSubmissionLifecycleTest {
             accounts,
             repository,
             FixedTimeProvider(),
+            FakeGameTemplateRepository(),
         )
         runCurrent()
         viewModel.selectType(OrderType.SHORT_TASK)

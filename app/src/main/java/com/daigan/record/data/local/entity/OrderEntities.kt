@@ -55,6 +55,16 @@ data class OrderEntity(
     val createdAt: Instant,
     val updatedAt: Instant,
     val completedAt: Instant?,
+    /**
+     * Truthful creation provenance copied from the selected template at creation.
+     *
+     * Plain text, no foreign key: the template may later be edited, replaced or deleted
+     * and this label must stay exactly as the order was created. Legacy orders (and
+     * orders created without a template) keep NULL — no historical version is invented.
+     */
+    val sourceTemplateId: String? = null,
+    val sourceTemplateName: String? = null,
+    val sourceTemplateVersion: String? = null,
 )
 
 /**

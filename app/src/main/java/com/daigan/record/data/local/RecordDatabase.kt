@@ -19,10 +19,12 @@ import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
 import com.daigan.record.data.local.dao.ReceiptDao
 import com.daigan.record.data.local.dao.TaskDao
+import com.daigan.record.data.local.dao.TemplateDao
 import com.daigan.record.data.local.entity.AttachmentEntity
 import com.daigan.record.data.local.entity.CompletionBatchEntity
 import com.daigan.record.data.local.entity.CompletionBatchItemEntity
 import com.daigan.record.data.local.entity.GameAccountEntity
+import com.daigan.record.data.local.entity.GameTemplateEntity
 import com.daigan.record.data.local.entity.HostingPeriodEntity
 import com.daigan.record.data.local.entity.OrderCreationOperationEntity
 import com.daigan.record.data.local.entity.OrderEntity
@@ -32,6 +34,9 @@ import com.daigan.record.data.local.entity.ReceiptCorrectionEntity
 import com.daigan.record.data.local.entity.ReceiptEntity
 import com.daigan.record.data.local.entity.TaskDefinitionEntity
 import com.daigan.record.data.local.entity.TaskOccurrenceEntity
+import com.daigan.record.data.local.entity.TemplateCategoryEntity
+import com.daigan.record.data.local.entity.TemplateSeedStateEntity
+import com.daigan.record.data.local.entity.TemplateTaskEntity
 
 /**
  * Current schema version, defined next to the migrations so tests do not hard code it.
@@ -44,15 +49,20 @@ import com.daigan.record.data.local.entity.TaskOccurrenceEntity
  * 4 -> 5 adds `order_creation_operations`, the stored result of a whole create-order
  *       command. Existing orders keep no operation row: they were created before the
  *       command was idempotent, and inventing identities for them would be dishonest.
+ * 5 -> 6 adds the editable game-template library, the built-in seed markers, an
+ *       optional account default template and nullable order provenance columns.
+ *       Existing orders, periods, tasks, occurrences, receipts, corrections and
+ *       creation-operation rows are untouched: legacy rows keep NULL provenance and
+ *       no template is invented for them.
  */
-const val RECORD_DATABASE_VERSION = 5
+const val RECORD_DATABASE_VERSION = 6
 
 /**
  * The single source of truth for business data.
  *
- * Version 4 is Phase 3: real receipts, auditable corrections and financial history on
- * top of the Phase 2 work model. Game template libraries stay out of the schema until
- * their phase needs real tables.
+ * Version 6 is Phase 4: a persistent, editable template library plus honest creation
+ * provenance. Templates are creation defaults only; orders copy their own task and
+ * refresh snapshots and hold no foreign key to a template.
  */
 @Database(
     entities = [
@@ -69,6 +79,10 @@ const val RECORD_DATABASE_VERSION = 5
         ReceiptEntity::class,
         ReceiptCorrectionEntity::class,
         OrderCreationOperationEntity::class,
+        GameTemplateEntity::class,
+        TemplateCategoryEntity::class,
+        TemplateTaskEntity::class,
+        TemplateSeedStateEntity::class,
     ],
     version = RECORD_DATABASE_VERSION,
     exportSchema = true,
@@ -98,6 +112,8 @@ abstract class RecordDatabase : RoomDatabase() {
     abstract fun receiptDao(): ReceiptDao
 
     abstract fun creationOperationDao(): CreationOperationDao
+
+    abstract fun templateDao(): TemplateDao
 
     companion object {
         const val NAME = "daigan-record.db"
@@ -504,8 +520,111 @@ abstract class RecordDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Phase 4 template library. Only new tables and nullable columns are added.
+         *
+         * No template content is inserted by the migration: built-ins are seeded through
+         * the repository with a durable seed marker, so an upgrade never re-creates a
+         * template the user already deleted and never overwrites an edited one. Existing
+         * orders keep NULL provenance and existing accounts keep no default template;
+         * no historical template version is fabricated.
+         */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `game_templates` (
+                        `id` TEXT NOT NULL,
+                        `gameName` TEXT NOT NULL,
+                        `templateVersion` TEXT NOT NULL,
+                        `gameVersionNotes` TEXT,
+                        `zoneId` TEXT NOT NULL,
+                        `dailyRefreshMinutes` INTEGER NOT NULL,
+                        `weeklyRefreshDay` INTEGER NOT NULL,
+                        `weeklyRefreshMinutes` INTEGER NOT NULL,
+                        `origin` TEXT NOT NULL,
+                        `builtInKey` TEXT,
+                        `sortOrder` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_game_templates_builtInKey` ON `game_templates` (`builtInKey`)",
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `template_categories` (
+                        `id` TEXT NOT NULL,
+                        `templateId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`templateId`) REFERENCES `game_templates`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_template_categories_templateId` " +
+                        "ON `template_categories` (`templateId`)",
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `template_tasks` (
+                        `id` TEXT NOT NULL,
+                        `templateId` TEXT NOT NULL,
+                        `categoryId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `progressType` TEXT NOT NULL,
+                        `startValue` TEXT NOT NULL,
+                        `targetValue` TEXT NOT NULL,
+                        `unit` TEXT,
+                        `recurrence` TEXT NOT NULL,
+                        `weekdays` TEXT,
+                        `everyNDays` INTEGER,
+                        `sortOrder` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`templateId`) REFERENCES `game_templates`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT,
+                        FOREIGN KEY(`categoryId`) REFERENCES `template_categories`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_template_tasks_templateId` " +
+                        "ON `template_tasks` (`templateId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_template_tasks_categoryId` " +
+                        "ON `template_tasks` (`categoryId`)",
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `template_seed_state` (
+                        `seedKey` TEXT NOT NULL,
+                        `appliedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`seedKey`)
+                    )
+                    """.trimIndent(),
+                )
+
+                db.execSQL("ALTER TABLE `game_accounts` ADD COLUMN `defaultTemplateId` TEXT")
+                db.execSQL("ALTER TABLE `orders` ADD COLUMN `sourceTemplateId` TEXT")
+                db.execSQL("ALTER TABLE `orders` ADD COLUMN `sourceTemplateName` TEXT")
+                db.execSQL("ALTER TABLE `orders` ADD COLUMN `sourceTemplateVersion` TEXT")
+            }
+        }
+
         /** Every migration the app must run; the list is also used by tests. */
         val ALL_MIGRATIONS: Array<Migration> =
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
     }
 }

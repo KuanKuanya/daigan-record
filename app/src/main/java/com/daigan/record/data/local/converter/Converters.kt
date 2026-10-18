@@ -8,6 +8,7 @@ import com.daigan.record.data.model.OrderType
 import com.daigan.record.data.model.PaymentMode
 import com.daigan.record.data.model.ProgressType
 import com.daigan.record.data.model.RecurrenceType
+import com.daigan.record.data.model.TemplateOrigin
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -88,4 +89,10 @@ class OrderEnumConverters {
 
     @TypeConverter
     fun toBatchItemType(value: String): BatchItemType = BatchItemType.valueOf(value)
+
+    @TypeConverter
+    fun fromTemplateOrigin(value: TemplateOrigin): String = value.name
+
+    @TypeConverter
+    fun toTemplateOrigin(value: String): TemplateOrigin = TemplateOrigin.valueOf(value)
 }

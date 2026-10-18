@@ -827,7 +827,7 @@ private fun OrderSummaryCard(detail: OrderDetail) {
                         " %02d:%02d".format(
                             period.refresh.weeklyRefreshTime.hour,
                             period.refresh.weeklyRefreshTime.minute,
-                        ) + "（用户自填）",
+                        ) + "（本期快照；模板或手动填写，续期后不改写旧期）",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp),
@@ -1338,6 +1338,7 @@ private fun numericSubtitle(task: OrderTask): String =
     }
 
 private fun recurrenceText(task: OrderTask): String = when (task.recurrence) {
+    com.daigan.record.data.model.RecurrenceType.ONE_TIME -> "一次性"
     com.daigan.record.data.model.RecurrenceType.DAILY -> "每日"
     com.daigan.record.data.model.RecurrenceType.WEEKLY -> "每周"
     com.daigan.record.data.model.RecurrenceType.SELECTED_WEEKDAYS ->

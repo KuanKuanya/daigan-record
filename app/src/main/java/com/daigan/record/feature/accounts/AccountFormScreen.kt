@@ -1,5 +1,6 @@
 package com.daigan.record.feature.accounts
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +61,7 @@ fun AccountFormScreen(
         onBack = onDone,
         onDraftChange = viewModel::onDraftChange,
         onSelectLoginMethod = viewModel::selectLoginMethod,
+        onSelectTemplate = viewModel::selectTemplate,
         onSave = viewModel::save,
         modifier = modifier,
     )
@@ -70,6 +73,7 @@ internal fun AccountFormScreen(
     onBack: () -> Unit,
     onDraftChange: ((AccountDraft) -> AccountDraft) -> Unit,
     onSelectLoginMethod: (LoginMethod) -> Unit,
+    onSelectTemplate: (String?) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -101,11 +105,55 @@ internal fun AccountFormScreen(
                 singleLine = true,
                 isError = errors.containsKey(AccountField.GAME_NAME),
                 supportingText = {
-                    Text(errors[AccountField.GAME_NAME] ?: "模板系统将在第四阶段提供，当前可直接填写游戏名称。")
+                    Text(errors[AccountField.GAME_NAME] ?: "可直接填写，也可从下方模板带入。")
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "默认游戏模板（选填）",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = "只影响以后为该账号新建订单时预填的任务与刷新规则；" +
+                        "已有订单、账号资料和收款都不受影响。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (uiState.templates.isEmpty()) {
+                    Text(
+                        text = "模板库为空，可先在 设置 → 游戏模板 新建或导入。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
+                        FilterChip(
+                            selected = draft.defaultTemplateId == null,
+                            onClick = { onSelectTemplate(null) },
+                            label = { Text("不使用") },
+                        )
+                        uiState.templates.forEach { template ->
+                            FilterChip(
+                                selected = draft.defaultTemplateId == template.id,
+                                onClick = { onSelectTemplate(template.id) },
+                                label = { Text(template.label) },
+                            )
+                        }
+                    }
+                }
+                uiState.templateName?.let { label ->
+                    Text(
+                        text = "已选择：$label",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             OutlinedTextField(
                 value = draft.server,
                 onValueChange = { value -> onDraftChange { it.copy(server = value) } },
