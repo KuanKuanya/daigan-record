@@ -217,4 +217,16 @@ interface OrderDao {
 
     @Query("SELECT * FROM orders WHERE deadlineDate = :date")
     suspend fun findShortOrdersByDeadline(date: LocalDate): List<OrderEntity>
+
+    // ---------------------------------------------------------- statistics reads
+
+    /** Every order, including archived owners/accounts: debt must never disappear. */
+    @Query("SELECT * FROM orders ORDER BY createdAt ASC, id ASC")
+    fun observeAllOrders(): Flow<List<OrderEntity>>
+
+    @Query("SELECT * FROM hosting_periods ORDER BY periodIndex ASC, id ASC")
+    fun observeAllPeriodsFlow(): Flow<List<HostingPeriodEntity>>
+
+    @Query("SELECT * FROM orders")
+    suspend fun findAllOrders(): List<OrderEntity>
 }

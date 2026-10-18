@@ -224,12 +224,25 @@ data class OrderDetail(
     /** Every persisted occurrence for this order. */
     val occurrences: List<TaskOccurrence>,
     val attachments: List<Attachment>,
+    /** Every receipt, including voided and superseded rows, newest actual time first. */
+    val receipts: List<Receipt>,
+    val receiptCorrections: List<ReceiptCorrectionRecord>,
     val today: LocalDate,
     /** Clock instant used to resolve the current weekly window. */
     val now: Instant,
 ) {
     val currentPeriod: HostingPeriod? get() = periods.firstOrNull()
     val isHosting: Boolean get() = order.isHosting
+
+    /** Paid and outstanding are always derived from prices and effective receipts. */
+    fun balance(): OrderBalance = Balances.order(order, periods, receipts)
+
+    fun receiptsForPeriod(periodId: String?): List<Receipt> =
+        receipts.filter { it.periodId == periodId }
+
+    fun correctionFor(receiptId: String): ReceiptCorrectionRecord? =
+        receiptCorrections.filter { it.receiptId == receiptId }
+            .maxByOrNull { it.createdAt }
 
     fun tasksForPeriod(periodId: String?): List<OrderTask> =
         tasks.filter { it.periodId == periodId }.sortedBy { it.sortOrder }

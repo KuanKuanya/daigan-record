@@ -5,10 +5,12 @@ import androidx.room.Room
 import com.daigan.record.data.local.RecordDatabase
 import com.daigan.record.data.local.dao.AttachmentDao
 import com.daigan.record.data.local.dao.CompletionBatchDao
+import com.daigan.record.data.local.dao.CreationOperationDao
 import com.daigan.record.data.local.dao.GameAccountDao
 import com.daigan.record.data.local.dao.OccurrenceDao
 import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
+import com.daigan.record.data.local.dao.ReceiptDao
 import com.daigan.record.data.local.dao.TaskDao
 import com.daigan.record.data.local.di.DatabaseModule
 import dagger.Module
@@ -56,4 +58,11 @@ object TestDatabaseModule {
 
     @Provides
     fun provideAttachmentDao(database: RecordDatabase): AttachmentDao = database.attachmentDao()
+
+    @Provides
+    fun provideReceiptDao(database: RecordDatabase): ReceiptDao = database.receiptDao()
+
+    @Provides
+    fun provideCreationOperationDao(database: RecordDatabase): CreationOperationDao =
+        database.creationOperationDao()
 }

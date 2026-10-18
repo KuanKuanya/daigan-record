@@ -73,6 +73,11 @@ class Phase2ManualProbeTest {
                 database, database.ownerDao(), database.gameAccountDao(),
                 database.orderDao(), fixed,
             )
+            val receiptLedger = com.daigan.record.data.repository.ReceiptLedger(
+                receiptDao = database.receiptDao(),
+                orderDao = database.orderDao(),
+                timeProvider = fixed,
+            )
             val orderRepository = DefaultOrderRepository(
                 database = database,
                 orderDao = database.orderDao(),
@@ -82,6 +87,9 @@ class Phase2ManualProbeTest {
                 attachmentDao = database.attachmentDao(),
                 accountDao = database.gameAccountDao(),
                 ownerDao = database.ownerDao(),
+                receiptDao = database.receiptDao(),
+                receiptLedger = receiptLedger,
+                creationOperationDao = database.creationOperationDao(),
                 ticker = ticker,
             )
             val attachmentRepository = DefaultAttachmentRepository(

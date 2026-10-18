@@ -12,19 +12,24 @@ import com.daigan.record.data.local.converter.LoginMethodConverters
 import com.daigan.record.data.local.converter.OrderEnumConverters
 import com.daigan.record.data.local.dao.AttachmentDao
 import com.daigan.record.data.local.dao.CompletionBatchDao
+import com.daigan.record.data.local.dao.CreationOperationDao
 import com.daigan.record.data.local.dao.GameAccountDao
 import com.daigan.record.data.local.dao.OccurrenceDao
 import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
+import com.daigan.record.data.local.dao.ReceiptDao
 import com.daigan.record.data.local.dao.TaskDao
 import com.daigan.record.data.local.entity.AttachmentEntity
 import com.daigan.record.data.local.entity.CompletionBatchEntity
 import com.daigan.record.data.local.entity.CompletionBatchItemEntity
 import com.daigan.record.data.local.entity.GameAccountEntity
 import com.daigan.record.data.local.entity.HostingPeriodEntity
+import com.daigan.record.data.local.entity.OrderCreationOperationEntity
 import com.daigan.record.data.local.entity.OrderEntity
 import com.daigan.record.data.local.entity.OwnerEntity
 import com.daigan.record.data.local.entity.OwnerNumberSequenceEntity
+import com.daigan.record.data.local.entity.ReceiptCorrectionEntity
+import com.daigan.record.data.local.entity.ReceiptEntity
 import com.daigan.record.data.local.entity.TaskDefinitionEntity
 import com.daigan.record.data.local.entity.TaskOccurrenceEntity
 
@@ -34,15 +39,20 @@ import com.daigan.record.data.local.entity.TaskOccurrenceEntity
  * 1 -> 2 added the archive batch provenance columns.
  * 2 -> 3 adds orders, hosting periods, task snapshots, occurrences, completion batch
  *       audit rows and screenshot attachment metadata. No existing table is rewritten.
+ * 3 -> 4 adds receipts and receipt corrections. Existing orders and periods keep no
+ *       receipt rows: a paid amount is never inferred from completion or from a price.
+ * 4 -> 5 adds `order_creation_operations`, the stored result of a whole create-order
+ *       command. Existing orders keep no operation row: they were created before the
+ *       command was idempotent, and inventing identities for them would be dishonest.
  */
-const val RECORD_DATABASE_VERSION = 3
+const val RECORD_DATABASE_VERSION = 5
 
 /**
  * The single source of truth for business data.
  *
- * Version 3 is Phase 2: account-scoped orders, hosting periods, task definitions,
- * occurrence history, undo batches and attachment metadata. Receipts and game template
- * libraries stay out of the schema until their phases need real tables.
+ * Version 4 is Phase 3: real receipts, auditable corrections and financial history on
+ * top of the Phase 2 work model. Game template libraries stay out of the schema until
+ * their phase needs real tables.
  */
 @Database(
     entities = [
@@ -56,6 +66,9 @@ const val RECORD_DATABASE_VERSION = 3
         CompletionBatchEntity::class,
         CompletionBatchItemEntity::class,
         AttachmentEntity::class,
+        ReceiptEntity::class,
+        ReceiptCorrectionEntity::class,
+        OrderCreationOperationEntity::class,
     ],
     version = RECORD_DATABASE_VERSION,
     exportSchema = true,
@@ -81,6 +94,10 @@ abstract class RecordDatabase : RoomDatabase() {
     abstract fun completionBatchDao(): CompletionBatchDao
 
     abstract fun attachmentDao(): AttachmentDao
+
+    abstract fun receiptDao(): ReceiptDao
+
+    abstract fun creationOperationDao(): CreationOperationDao
 
     companion object {
         const val NAME = "daigan-record.db"
@@ -362,7 +379,133 @@ abstract class RecordDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Phase 3 receipts. Only two new tables are created; every Phase 2 row stays
+         * exactly as it was. No receipt is fabricated for an existing order or period:
+         * a price is a promise, not a payment.
+         */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `receipts` (
+                        `id` TEXT NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `orderId` TEXT NOT NULL,
+                        `periodId` TEXT,
+                        `amountCents` INTEGER NOT NULL,
+                        `receivedAt` INTEGER NOT NULL,
+                        `channel` TEXT NOT NULL,
+                        `note` TEXT,
+                        `status` TEXT NOT NULL,
+                        `replacedByReceiptId` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`orderId`) REFERENCES `orders`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT,
+                        FOREIGN KEY(`periodId`) REFERENCES `hosting_periods`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_receipts_operationId` " +
+                        "ON `receipts` (`operationId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_receipts_orderId` " +
+                        "ON `receipts` (`orderId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_receipts_periodId` " +
+                        "ON `receipts` (`periodId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_receipts_receivedAt` " +
+                        "ON `receipts` (`receivedAt`)",
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `receipt_corrections` (
+                        `id` TEXT NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `receiptId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `reason` TEXT,
+                        `previousAmountCents` INTEGER NOT NULL,
+                        `previousReceivedAt` INTEGER NOT NULL,
+                        `previousChannel` TEXT NOT NULL,
+                        `previousNote` TEXT,
+                        `newReceiptId` TEXT,
+                        `newAmountCents` INTEGER,
+                        `newReceivedAt` INTEGER,
+                        `newChannel` TEXT,
+                        `newNote` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT,
+                        FOREIGN KEY(`newReceiptId`) REFERENCES `receipts`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_receipt_corrections_operationId` " +
+                        "ON `receipt_corrections` (`operationId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_receipt_corrections_receiptId` " +
+                        "ON `receipt_corrections` (`receiptId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_receipt_corrections_newReceiptId` " +
+                        "ON `receipt_corrections` (`newReceiptId`)",
+                )
+            }
+        }
+
+        /**
+         * Phase 3 repair: persistent identity of a whole create-order command.
+         *
+         * Only one new table is created; orders, periods, receipts and every Phase 2
+         * row stay untouched. Existing orders get no synthetic operation row, so their
+         * historical creation cannot be mistaken for a retry of a new command.
+         */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `order_creation_operations` (
+                        `operationId` TEXT NOT NULL,
+                        `orderType` TEXT NOT NULL,
+                        `fingerprint` TEXT NOT NULL,
+                        `orderId` TEXT NOT NULL,
+                        `receiptId` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`operationId`),
+                        FOREIGN KEY(`orderId`) REFERENCES `orders`(`id`)
+                            ON UPDATE CASCADE ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_order_creation_operations_operationId` " +
+                        "ON `order_creation_operations` (`operationId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "`index_order_creation_operations_orderId` " +
+                        "ON `order_creation_operations` (`orderId`)",
+                )
+            }
+        }
+
         /** Every migration the app must run; the list is also used by tests. */
-        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        val ALL_MIGRATIONS: Array<Migration> =
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
     }
 }

@@ -31,6 +31,7 @@ import com.daigan.record.feature.orders.BackfillScreen
 import com.daigan.record.feature.orders.NewOrderScreen
 import com.daigan.record.feature.orders.OrderDetailScreen
 import com.daigan.record.feature.settings.PendingFeatureScreen
+import com.daigan.record.feature.settings.ReceiptHistoryScreen
 import com.daigan.record.feature.settings.SettingsScreen
 import com.daigan.record.feature.stats.StatsScreen
 import com.daigan.record.feature.today.TodayScreen
@@ -89,13 +90,25 @@ fun DaiganRecordApp(navController: NavHostController = rememberNavController()) 
                 )
             }
             composable(Routes.STATS) {
-                StatsScreen(onOpenSettings = { navController.navigate(Routes.SETTINGS) })
+                StatsScreen(
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                )
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onBack = { navController.popBackStack() },
-                    onOpenSection = { section -> navController.navigate(Routes.settingsSection(section)) },
+                    onOpenSection = { section ->
+                        if (section == SettingsSection.RECEIPTS) {
+                            navController.navigate(Routes.RECEIPTS)
+                        } else {
+                            navController.navigate(Routes.settingsSection(section))
+                        }
+                    },
                 )
+            }
+            composable(Routes.RECEIPTS) {
+                ReceiptHistoryScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = Routes.SETTINGS_PLACEHOLDER,

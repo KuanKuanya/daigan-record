@@ -147,8 +147,8 @@ private fun OwnerList(
         }
         item {
             Text(
-                text = "订单与打卡归属于具体游戏账号；收款、统计、模板与提醒属于后续阶段，" +
-                    "本版本不会显示虚构的实收或余额。",
+                text = "订单与打卡归属于具体游戏账号；收款、欠款与实收统计已按真实流水计算，" +
+                    "本版本不会显示虚构的实收或余额。模板、提醒与备份仍属于后续阶段。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

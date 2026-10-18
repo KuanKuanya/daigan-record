@@ -4,23 +4,29 @@ import androidx.room.withTransaction
 import com.daigan.record.core.time.GameCalendar
 import com.daigan.record.core.time.GameRefreshRules
 import com.daigan.record.core.time.HostingStatus
+import com.daigan.record.core.time.PersistedInstant
 import com.daigan.record.core.time.TimeTicker
 import com.daigan.record.core.time.nextBoundaryAcross
 import com.daigan.record.data.local.RecordDatabase
 import com.daigan.record.data.local.dao.AttachmentDao
 import com.daigan.record.data.local.dao.CompletionBatchDao
+import com.daigan.record.data.local.dao.CreationOperationDao
 import com.daigan.record.data.local.dao.GameAccountDao
 import com.daigan.record.data.local.dao.OccurrenceDao
 import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
+import com.daigan.record.data.local.dao.ReceiptDao
 import com.daigan.record.data.local.dao.TaskDao
 import com.daigan.record.data.local.entity.AttachmentEntity
 import com.daigan.record.data.local.entity.CompletionBatchEntity
 import com.daigan.record.data.local.entity.CompletionBatchItemEntity
 import com.daigan.record.data.local.entity.GameAccountEntity
 import com.daigan.record.data.local.entity.HostingPeriodEntity
+import com.daigan.record.data.local.entity.OrderCreationOperationEntity
 import com.daigan.record.data.local.entity.OrderEntity
 import com.daigan.record.data.local.entity.OwnerEntity
+import com.daigan.record.data.local.entity.ReceiptCorrectionEntity
+import com.daigan.record.data.local.entity.ReceiptEntity
 import com.daigan.record.data.local.entity.TaskDefinitionEntity
 import com.daigan.record.data.local.entity.TaskOccurrenceEntity
 import com.daigan.record.data.local.encodeWeekdays
@@ -34,10 +40,13 @@ import com.daigan.record.data.model.HostingPeriod
 import com.daigan.record.data.model.OccurrenceRules
 import com.daigan.record.data.model.OccurrenceSlot
 import com.daigan.record.data.model.Order
+import com.daigan.record.data.model.OrderCommandFingerprint
 import com.daigan.record.data.model.OrderDetail
 import com.daigan.record.data.model.OrderSummary
+import com.daigan.record.data.model.Money
 import com.daigan.record.data.model.OrderTask
 import com.daigan.record.data.model.OrderType
+import com.daigan.record.data.model.PaymentRequest
 import com.daigan.record.data.model.ProgressType
 import com.daigan.record.data.model.RecurrenceType
 import com.daigan.record.data.model.RenewalResult
@@ -66,6 +75,13 @@ import kotlinx.coroutines.flow.map
 const val ARCHIVED_OWNER_ORDER_MESSAGE = "老板已归档，请先恢复老板后再操作订单"
 const val ARCHIVED_ACCOUNT_ORDER_MESSAGE = "游戏账号已归档，请先恢复账号后再操作订单"
 const val ARCHIVED_OWNER_WORK_MESSAGE = "老板已归档，请先恢复老板后再记录工作"
+
+/**
+ * Reusing a create-order operation id with a different normalized payload is a
+ * programming/UI error, not a retry: the stored order is returned only when the whole
+ * command matches.
+ */
+const val CREATION_CONFLICT_MESSAGE = "该建单操作标识已被另一份订单使用，请刷新后查看原订单"
 
 /**
  * The occurrence a screen showed is no longer the current one (a daily or weekly
@@ -104,8 +120,17 @@ interface OrderRepository {
     /** Unfinished short orders on active accounts. */
     fun observeTodayShort(): Flow<List<ShortWorkOrder>>
 
+    /**
+     * Creates a short order (tasks and optional first receipt) as **one** idempotent
+     * command keyed by [ShortOrderDraft.creationOperationId].
+     *
+     * An identical retry returns the original order id. Reusing the id with a different
+     * normalized payload is rejected. Any validation or receipt failure rolls the whole
+     * creation back.
+     */
     suspend fun createShortOrder(draft: ShortOrderDraft): String
 
+    /** Hosting counterpart of [createShortOrder]; the period is part of the command. */
     suspend fun createHostingOrder(draft: HostingOrderDraft): String
 
     suspend fun setShortTaskCompleted(taskId: String, completed: Boolean)
@@ -207,6 +232,9 @@ class DefaultOrderRepository @Inject constructor(
     private val attachmentDao: AttachmentDao,
     private val accountDao: GameAccountDao,
     private val ownerDao: OwnerDao,
+    private val receiptDao: ReceiptDao,
+    private val receiptLedger: ReceiptLedger,
+    private val creationOperationDao: CreationOperationDao,
     private val ticker: TimeTicker,
 ) : OrderRepository {
 
@@ -289,6 +317,8 @@ class DefaultOrderRepository @Inject constructor(
         val occurrences: List<TaskOccurrenceEntity>,
         val attachments: List<AttachmentEntity>,
         val periods: List<HostingPeriodEntity>,
+        val receipts: List<ReceiptEntity> = emptyList(),
+        val corrections: List<ReceiptCorrectionEntity> = emptyList(),
     )
 
     private data class TodayHostingSnapshot(
@@ -322,7 +352,14 @@ class DefaultOrderRepository @Inject constructor(
                             orderDao.observePeriodsForOrder(orderId),
                         ) { owner, tasks, occurrences, attachments, periods ->
                             OrderDetailSnapshot(owner, tasks, occurrences, attachments, periods)
-                        }.flatMapLatest { snapshot ->
+                        }
+                            .combine(receiptDao.observeForOrder(orderId)) { snapshot, receipts ->
+                                snapshot.copy(receipts = receipts)
+                            }
+                            .combine(receiptDao.observeCorrectionsForOrder(orderId)) { snapshot, corrections ->
+                                snapshot.copy(corrections = corrections)
+                            }
+                            .flatMapLatest { snapshot ->
                             // Daily/weekly boundaries move "today" and the live weekly
                             // window without any database write.
                             val rules = buildList {
@@ -339,6 +376,8 @@ class DefaultOrderRepository @Inject constructor(
                                     periods = snapshot.periods.map { period -> period.toModel() },
                                     occurrences = snapshot.occurrences.map { it.toModel() },
                                     attachments = snapshot.attachments.map { it.toModel() },
+                                    receipts = snapshot.receipts.map { it.toModel() },
+                                    receiptCorrections = snapshot.corrections.map { it.toModel() },
                                     today = GameCalendar.gameDate(now, refreshOf(order)),
                                     now = now,
                                 )
@@ -478,13 +517,15 @@ class DefaultOrderRepository @Inject constructor(
     )
 
     override suspend fun createShortOrder(draft: ShortOrderDraft): String {
+        require(draft.creationOperationId.isNotBlank()) { "建单操作标识不能为空" }
         val errors = draft.validate()
         require(errors.isEmpty()) { errors.values.first() }
         val priceCents = requireNotNull(draft.priceCentsOrNull) { "请填写约定总价" }
-        val now = ticker.now()
+        val now = PersistedInstant.normalize(ticker.now())
         val rules = GameRefreshRules.provisional(ZoneId.systemDefault())
+        val fingerprint = OrderCommandFingerprint.short(draft)
 
-        return database.withTransaction {
+        return createOnce(draft.creationOperationId, OrderType.SHORT_TASK, fingerprint) {
             requireWritableAccount(draft.accountId, draft.ownerId)
             val orderId = UUID.randomUUID().toString()
             orderDao.insert(
@@ -516,18 +557,26 @@ class DefaultOrderRepository @Inject constructor(
                     ),
                 )
             }
-            orderId
+            val receiptId = recordInitialPayment(
+                orderId = orderId,
+                periodId = null,
+                draft = draft.initialPayment,
+                now = now,
+            )
+            CreatedOrder(orderId = orderId, receiptId = receiptId)
         }
     }
 
     override suspend fun createHostingOrder(draft: HostingOrderDraft): String {
+        require(draft.creationOperationId.isNotBlank()) { "建单操作标识不能为空" }
         val errors = draft.validate()
         require(errors.isEmpty()) { errors.values.first() }
         val priceCents = requireNotNull(draft.priceCentsOrNull) { "请填写本期约定价格" }
-        val now = ticker.now()
+        val now = PersistedInstant.normalize(ticker.now())
         val rules = draft.refresh
+        val fingerprint = OrderCommandFingerprint.hosting(draft)
 
-        return database.withTransaction {
+        return createOnce(draft.creationOperationId, OrderType.HOSTING, fingerprint) {
             requireWritableAccount(draft.accountId, draft.ownerId)
             val orderId = UUID.randomUUID().toString()
             val periodId = UUID.randomUUID().toString()
@@ -576,8 +625,109 @@ class DefaultOrderRepository @Inject constructor(
                     ),
                 )
             }
-            orderId
+            val receiptId = recordInitialPayment(
+                orderId = orderId,
+                periodId = periodId,
+                draft = draft.initialPayment,
+                now = now,
+            )
+            CreatedOrder(orderId = orderId, receiptId = receiptId)
         }
+    }
+
+    private data class CreatedOrder(val orderId: String, val receiptId: String?)
+
+    /**
+     * Runs [create] and stores its result under [operationId] in the same transaction.
+     *
+     * A replay with the same fingerprint returns the stored order. A different payload
+     * under an already-used id is rejected. The unique index on the operation id is the
+     * final guard: if a concurrent transaction won the race, the losing transaction is
+     * rolled back and re-reads the winner's committed result.
+     */
+    private suspend fun createOnce(
+        operationId: String,
+        type: OrderType,
+        fingerprint: String,
+        create: suspend () -> CreatedOrder,
+    ): String {
+        val attempted = runCatching {
+            database.withTransaction {
+                existingCreationOrNull(operationId, type, fingerprint)?.let {
+                    return@withTransaction it.orderId
+                }
+                val created = create()
+                creationOperationDao.insert(
+                    OrderCreationOperationEntity(
+                        operationId = operationId,
+                        orderType = type,
+                        fingerprint = fingerprint,
+                        orderId = created.orderId,
+                        receiptId = created.receiptId,
+                        createdAt = PersistedInstant.normalize(ticker.now()),
+                    ),
+                )
+                created.orderId
+            }
+        }
+        return attempted.getOrElse { error ->
+            // The insert may lose a race against an identical concurrent command. The
+            // rollback removed this attempt's order/receipt; return the winner instead.
+            val winner = runCatching { creationOperationDao.findByOperationId(operationId) }
+                .getOrNull()
+            if (winner != null) {
+                require(winner.orderType == type && winner.fingerprint == fingerprint) {
+                    CREATION_CONFLICT_MESSAGE
+                }
+                return@getOrElse winner.orderId
+            }
+            throw error
+        }
+    }
+
+    private suspend fun existingCreationOrNull(
+        operationId: String,
+        type: OrderType,
+        fingerprint: String,
+    ): OrderCreationOperationEntity? {
+        val existing = creationOperationDao.findByOperationId(operationId) ?: return null
+        require(existing.orderType == type && existing.fingerprint == fingerprint) {
+            CREATION_CONFLICT_MESSAGE
+        }
+        return existing
+    }
+
+    /**
+     * Optional first receipt, written inside the creation transaction. The receipt uses
+     * the user-entered **actual** receipt time (not the recording time) normalized to
+     * the persisted precision. Any validation or insert failure aborts the whole
+     * transaction, so a rejected payment can never leave a half-created order or period.
+     *
+     * Returns the created receipt id (or null) so the creation operation can store the
+     * complete result of the command.
+     */
+    private suspend fun recordInitialPayment(
+        orderId: String,
+        periodId: String?,
+        draft: com.daigan.record.data.model.InitialPaymentDraft?,
+        now: Instant,
+    ): String? {
+        if (draft == null) return null
+        val amountCents = Money.parsePositiveYuanToCents(draft.amountYuan)
+        val receivedAt = draft.receivedAt?.let(PersistedInstant::normalize) ?: now
+        val result = receiptLedger.record(
+            PaymentRequest(
+                orderId = orderId,
+                periodId = periodId,
+                amountCents = amountCents,
+                receivedAt = receivedAt,
+                channel = draft.channel,
+                note = draft.note,
+                operationId = draft.operationId,
+            ),
+            now = now,
+        )
+        return result.receipt.id
     }
 
     override suspend fun setShortTaskCompleted(taskId: String, completed: Boolean) {

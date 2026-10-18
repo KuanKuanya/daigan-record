@@ -4,18 +4,25 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.daigan.record.core.time.TimeProvider
 import com.daigan.record.data.model.Attachment
+import com.daigan.record.data.model.Money
 import com.daigan.record.data.model.OrderDetail
+import com.daigan.record.data.model.PaymentChannel
+import com.daigan.record.data.model.PaymentRequest
+import com.daigan.record.data.model.ReceiptCorrectionRequest
 import com.daigan.record.data.model.RenewalResult
 import com.daigan.record.data.model.UndoResult
 import com.daigan.record.data.repository.AttachmentRepository
 import com.daigan.record.data.repository.OrderRepository
+import com.daigan.record.data.repository.ReceiptRepository
 import com.daigan.record.data.repository.StaleOccurrenceException
 import com.daigan.record.data.repository.DisplayedHostingSnapshot
 import com.daigan.record.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import java.math.BigDecimal
+import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,6 +42,7 @@ data class OrderDetailUiState(
     val error: String? = null,
     val lastBatchId: String? = null,
     val undoResult: UndoResult? = null,
+    val paymentInFlight: Boolean = false,
 )
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -43,6 +51,8 @@ class OrderDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val orderRepository: OrderRepository,
     private val attachmentRepository: AttachmentRepository,
+    private val receiptRepository: ReceiptRepository,
+    private val timeProvider: TimeProvider,
 ) : ViewModel() {
 
     private val orderId: String = checkNotNull(savedStateHandle[Routes.ORDER_ID_ARG]) {
@@ -58,9 +68,14 @@ class OrderDetailViewModel @Inject constructor(
     private val _renewalApplied = MutableSharedFlow<RenewalResult>(extraBufferCapacity = 1)
     val renewalApplied: SharedFlow<RenewalResult> = _renewalApplied
 
+    /** Emits after a payment or receipt correction committed, so dialogs can close. */
+    private val _financialApplied = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val financialApplied: SharedFlow<Unit> = _financialApplied
+
     private val refreshTick = MutableStateFlow(0L)
     // ViewModel actions run on Main; acquire before launch so queued taps cannot overlap.
     private var batchActionInFlight = false
+    private var financialActionInFlight = false
 
     init {
         viewModelScope.launch {
@@ -227,6 +242,143 @@ class OrderDetailViewModel @Inject constructor(
                 )
                 _renewalApplied.emit(result)
             }.onFailure { emit("续期失败：${it.message ?: "未知错误"}") }
+        }
+    }
+
+    /** Fresh clock reading for a payment form default. */
+    fun now(): Instant = timeProvider.now()
+
+    /**
+     * Records a payment against an explicitly chosen period (or the short order).
+     * The gate is acquired synchronously before the coroutine starts, so two taps in
+     * the same frame cannot both reach the repository. [operationId] comes from the
+     * dialog and is kept for retries of the same submission.
+     */
+    fun recordPayment(
+        periodId: String?,
+        amountYuan: String,
+        receivedAt: Instant,
+        channel: PaymentChannel,
+        note: String,
+        operationId: String,
+    ) {
+        val cents = Money.parsePositiveYuanToCentsOrNull(amountYuan)
+        if (cents == null) {
+            emit("请输入大于 0 且最多两位小数的收款金额")
+            return
+        }
+        if (operationId.isBlank()) {
+            emit("缺少收款操作标识，请重新打开收款窗口")
+            return
+        }
+        runFinancial {
+            runCatching {
+                receiptRepository.recordPayment(
+                    PaymentRequest(
+                        orderId = orderId,
+                        periodId = periodId,
+                        amountCents = cents,
+                        receivedAt = receivedAt,
+                        channel = channel,
+                        note = note,
+                        operationId = operationId,
+                    ),
+                )
+            }.onSuccess { result ->
+                emit(
+                    if (result.alreadyApplied) {
+                        "该笔收款已经记录，未重复入账"
+                    } else {
+                        "已记录实收 ${Money.formatCents(result.receipt.amountCents)}（${result.receipt.channel.label}）"
+                    },
+                )
+                _financialApplied.tryEmit(Unit)
+            }.onFailure { error ->
+                emit("收款失败：${error.message ?: "未知错误"}")
+            }
+        }
+    }
+
+    fun amendReceipt(
+        receiptId: String,
+        amountYuan: String,
+        receivedAt: Instant,
+        channel: PaymentChannel,
+        note: String,
+        reason: String,
+        operationId: String,
+    ) {
+        val cents = Money.parsePositiveYuanToCentsOrNull(amountYuan)
+        if (cents == null) {
+            emit("请输入大于 0 且最多两位小数的更正金额")
+            return
+        }
+        if (operationId.isBlank()) {
+            emit("缺少更正操作标识，请重新打开更正窗口")
+            return
+        }
+        runFinancial {
+            runCatching {
+                receiptRepository.correctReceipt(
+                    ReceiptCorrectionRequest.Amend(
+                        operationId = operationId,
+                        receiptId = receiptId,
+                        amountCents = cents,
+                        receivedAt = receivedAt,
+                        channel = channel,
+                        note = note,
+                        reason = reason,
+                    ),
+                )
+            }.onSuccess { result ->
+                emit(
+                    if (result.alreadyApplied) {
+                        "该更正已经生效，未重复处理"
+                    } else {
+                        "已更正收款，原记录保留在流水中"
+                    },
+                )
+                _financialApplied.tryEmit(Unit)
+            }.onFailure { error ->
+                emit("更正失败：${error.message ?: "未知错误"}")
+            }
+        }
+    }
+
+    fun voidReceipt(receiptId: String, reason: String, operationId: String) {
+        if (operationId.isBlank()) {
+            emit("缺少作废操作标识，请重新打开作废窗口")
+            return
+        }
+        runFinancial {
+            runCatching {
+                receiptRepository.correctReceipt(
+                    ReceiptCorrectionRequest.Void(
+                        operationId = operationId,
+                        receiptId = receiptId,
+                        reason = reason,
+                    ),
+                )
+            }.onSuccess { result ->
+                emit(if (result.alreadyApplied) "该收款已经作废" else "已作废该笔收款，记录仍保留在流水中")
+                _financialApplied.tryEmit(Unit)
+            }.onFailure { error ->
+                emit("作废失败：${error.message ?: "未知错误"}")
+            }
+        }
+    }
+
+    private fun runFinancial(block: suspend () -> Unit) {
+        if (financialActionInFlight) return
+        financialActionInFlight = true
+        _uiState.value = _uiState.value.copy(paymentInFlight = true)
+        viewModelScope.launch {
+            try {
+                block()
+            } finally {
+                financialActionInFlight = false
+                _uiState.value = _uiState.value.copy(paymentInFlight = false)
+            }
         }
     }
 

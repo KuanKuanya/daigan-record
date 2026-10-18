@@ -25,6 +25,10 @@ interface OwnerDao {
     @Query("SELECT * FROM owners WHERE id = :ownerId")
     suspend fun findById(ownerId: String): OwnerEntity?
 
+    /** Consistent-snapshot read for the financial ledger (archived rows included). */
+    @Query("SELECT * FROM owners ORDER BY number ASC")
+    suspend fun findAll(): List<OwnerEntity>
+
     @Query("SELECT COUNT(*) FROM owners")
     suspend fun count(): Int
 

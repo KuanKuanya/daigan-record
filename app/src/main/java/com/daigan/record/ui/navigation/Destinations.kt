@@ -7,6 +7,7 @@ object Routes {
     const val STATS = "stats"
 
     const val SETTINGS = "settings"
+    const val RECEIPTS = "settings/receipts"
     const val SETTINGS_PLACEHOLDER = "settings/pending/{section}"
 
     const val ARCHIVED = "accounts/archived"
@@ -58,8 +59,8 @@ enum class SettingsSection(
     RECEIPTS(
         key = "receipts",
         title = "收款明细",
-        summary = "查阅已收款记录与归属期次",
-        pendingMessage = "收款与期次功能将在第三阶段实现，本版本不会显示任何示例流水。",
+        summary = "查阅全部实收流水、归属期次与更正记录",
+        pendingMessage = "收款明细已在本版本提供。",
     ),
     TEMPLATES(
         key = "templates",

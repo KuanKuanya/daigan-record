@@ -24,8 +24,16 @@ interface GameAccountDao {
     @Query("SELECT * FROM game_accounts WHERE archivedAt IS NOT NULL ORDER BY updatedAt DESC, rowid ASC")
     fun observeArchived(): Flow<List<GameAccountEntity>>
 
+    /** All accounts, archived included. Financial history and debt read this flow. */
+    @Query("SELECT * FROM game_accounts ORDER BY createdAt ASC, rowid ASC")
+    fun observeAll(): Flow<List<GameAccountEntity>>
+
     @Query("SELECT * FROM game_accounts WHERE id = :accountId")
     suspend fun findById(accountId: String): GameAccountEntity?
+
+    /** Consistent-snapshot read for the financial ledger (archived rows included). */
+    @Query("SELECT * FROM game_accounts ORDER BY createdAt ASC, rowid ASC")
+    suspend fun findAll(): List<GameAccountEntity>
 
     @Query("SELECT COUNT(*) FROM game_accounts WHERE ownerId = :ownerId")
     suspend fun countForOwner(ownerId: String): Int

@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -42,11 +43,14 @@ import com.daigan.record.core.time.HostingStatus
 import com.daigan.record.data.model.Attachment
 import com.daigan.record.data.model.HostingPeriod
 import com.daigan.record.data.model.Money
+import com.daigan.record.data.model.OrderBalance
 import com.daigan.record.data.model.OrderDetail
 import com.daigan.record.data.model.OrderHistoryEntry
 import com.daigan.record.data.model.OrderTask
 import com.daigan.record.data.model.PaymentMode
 import com.daigan.record.data.model.ProgressType
+import com.daigan.record.data.model.Receipt
+import com.daigan.record.data.model.ReceiptStatus
 import com.daigan.record.data.model.UndoResult
 import com.daigan.record.ui.components.CompletionRow
 import com.daigan.record.ui.components.EmptyStateCard
@@ -73,6 +77,15 @@ fun OrderDetailScreen(
     var showRenewDialog by rememberSaveable { mutableStateOf(false) }
     var renewalOperationId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
 
+    // Payment/correction dialog state. Operation ids are created once per dialog and
+    // survive a failed submission so a retry is idempotent.
+    var showPaymentDialog by rememberSaveable { mutableStateOf(false) }
+    var paymentPeriodId by rememberSaveable { mutableStateOf<String?>(null) }
+    var paymentOperationId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    var amendReceiptId by rememberSaveable { mutableStateOf<String?>(null) }
+    var correctionOperationId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    var voidReceiptId by rememberSaveable { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         viewModel.messages.collect { snackbar.showSnackbar(it) }
     }
@@ -80,6 +93,15 @@ fun OrderDetailScreen(
         viewModel.renewalApplied.collect {
             showRenewDialog = false
             renewalOperationId = UUID.randomUUID().toString()
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.financialApplied.collect {
+            showPaymentDialog = false
+            amendReceiptId = null
+            voidReceiptId = null
+            paymentOperationId = UUID.randomUUID().toString()
+            correctionOperationId = UUID.randomUUID().toString()
         }
     }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -135,6 +157,20 @@ fun OrderDetailScreen(
                     renewalOperationId = UUID.randomUUID().toString()
                     showRenewDialog = true
                 },
+                onRecordPayment = { periodId ->
+                    paymentPeriodId = periodId
+                    paymentOperationId = UUID.randomUUID().toString()
+                    showPaymentDialog = true
+                },
+                onAmendReceipt = { receipt ->
+                    correctionOperationId = UUID.randomUUID().toString()
+                    amendReceiptId = receipt.id
+                },
+                onVoidReceipt = { receipt ->
+                    correctionOperationId = UUID.randomUUID().toString()
+                    voidReceiptId = receipt.id
+                },
+                paymentInFlight = state.paymentInFlight,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -150,6 +186,79 @@ fun OrderDetailScreen(
                 viewModel.renew(operationId, days, price)
             },
         )
+    }
+
+    if (showPaymentDialog && detail != null) {
+        PaymentDialog(
+            orderTitle = detail.order.title,
+            ownerLabel = "${detail.owner.nickname} · ${detail.owner.displayNumber}",
+            accountLabel = "${detail.account.gameName} · ${detail.account.server}",
+            balance = detail.balance(),
+            initialPeriodId = paymentPeriodId,
+            now = viewModel.now(),
+            operationId = paymentOperationId,
+            inFlight = uiState.paymentInFlight,
+            onDismiss = { if (!uiState.paymentInFlight) showPaymentDialog = false },
+            onConfirm = { request ->
+                viewModel.recordPayment(
+                    periodId = request.periodId,
+                    amountYuan = Money.centsToYuanText(request.amountCents),
+                    receivedAt = request.receivedAt,
+                    channel = request.channel,
+                    note = request.note.orEmpty(),
+                    operationId = request.operationId,
+                )
+            },
+        )
+    }
+
+    val amendReceipt = amendReceiptId?.let { id -> detail?.receipts?.firstOrNull { it.id == id } }
+    if (amendReceipt != null && detail != null) {
+        AmendReceiptDialog(
+            receipt = amendReceipt,
+            periodLabel = periodLabelFor(detail, amendReceipt.periodId),
+            inFlight = uiState.paymentInFlight,
+            onDismiss = { if (!uiState.paymentInFlight) amendReceiptId = null },
+            onConfirm = { amount, receivedAt, channel, note, reason ->
+                viewModel.amendReceipt(
+                    receiptId = amendReceipt.id,
+                    amountYuan = amount,
+                    receivedAt = receivedAt,
+                    channel = channel,
+                    note = note,
+                    reason = reason,
+                    operationId = correctionOperationId,
+                )
+            },
+        )
+    }
+
+    val voidReceipt = voidReceiptId?.let { id -> detail?.receipts?.firstOrNull { it.id == id } }
+    if (voidReceipt != null && detail != null) {
+        VoidReceiptDialog(
+            receipt = voidReceipt,
+            periodLabel = periodLabelFor(detail, voidReceipt.periodId),
+            inFlight = uiState.paymentInFlight,
+            onDismiss = { if (!uiState.paymentInFlight) voidReceiptId = null },
+            onConfirm = { reason ->
+                viewModel.voidReceipt(
+                    receiptId = voidReceipt.id,
+                    reason = reason,
+                    operationId = correctionOperationId,
+                )
+            },
+        )
+    }
+}
+
+private fun periodLabelFor(detail: OrderDetail, periodId: String?): String = if (periodId == null) {
+    "短期订单"
+} else {
+    val period = detail.periods.firstOrNull { it.id == periodId }
+    if (period == null) {
+        "托管期次"
+    } else {
+        "第 ${period.periodIndex + 1} 期 · ${formatGameDate(period.startDate)}–${formatGameDate(period.endDate)}"
     }
 }
 
@@ -173,9 +282,16 @@ internal fun OrderDetailContent(
     fileFor: (Attachment) -> File,
     onBackfill: (String) -> Unit,
     onRenewClick: () -> Unit,
+    onRecordPayment: (periodId: String?) -> Unit,
+    onAmendReceipt: (Receipt) -> Unit,
+    onVoidReceipt: (Receipt) -> Unit,
+    paymentInFlight: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val canWrite = !detail.owner.archived && !detail.account.archived
+    // Money stays writable for archived records: debt must remain collectible without
+    // reactivating any archived task.
+    val canPay = !paymentInFlight
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(
             title = detail.order.title,
@@ -207,6 +323,10 @@ internal fun OrderDetailContent(
                     fileFor = fileFor,
                     onBackfill = onBackfill,
                     onRenewClick = onRenewClick,
+                    onRecordPayment = onRecordPayment,
+                    onAmendReceipt = onAmendReceipt,
+                    onVoidReceipt = onVoidReceipt,
+                    canPay = canPay,
                 )
             } else {
                 shortSections(
@@ -221,6 +341,10 @@ internal fun OrderDetailContent(
                     onReplaceAttachment = onReplaceAttachment,
                     onDeleteAttachment = onDeleteAttachment,
                     fileFor = fileFor,
+                    onRecordPayment = onRecordPayment,
+                    onAmendReceipt = onAmendReceipt,
+                    onVoidReceipt = onVoidReceipt,
+                    canPay = canPay,
                 )
             }
 
@@ -283,6 +407,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.hostingSections(
     fileFor: (Attachment) -> File,
     onBackfill: (String) -> Unit,
     onRenewClick: () -> Unit,
+    onRecordPayment: (periodId: String?) -> Unit,
+    onAmendReceipt: (Receipt) -> Unit,
+    onVoidReceipt: (Receipt) -> Unit,
+    canPay: Boolean,
 ) {
     val currentPeriod = detail.currentPeriod
     val status = detail.currentStatus()
@@ -491,7 +619,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.hostingSections(
         }
     }
 
-    item { PaymentPendingCard(priceCents = currentPeriod?.priceCents, mode = detail.order.paymentMode) }
+    item {
+        PaymentSection(
+            detail = detail,
+            canPay = canPay,
+            onRecordPayment = onRecordPayment,
+            onAmendReceipt = onAmendReceipt,
+            onVoidReceipt = onVoidReceipt,
+        )
+    }
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.shortSections(
@@ -506,9 +642,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.shortSections(
     onReplaceAttachment: (String, Uri) -> Unit,
     onDeleteAttachment: (String) -> Unit,
     fileFor: (Attachment) -> File,
+    onRecordPayment: (periodId: String?) -> Unit,
+    onAmendReceipt: (Receipt) -> Unit,
+    onVoidReceipt: (Receipt) -> Unit,
+    canPay: Boolean,
 ) {
     item {
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Card(
+            modifier = Modifier.testTag("order-detail-summary"),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -599,7 +742,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.shortSections(
     if (completed.isEmpty()) {
         item {
             Text(
-                text = "还没有已完成的任务。完成与收款独立，本版本不记录任何实收。",
+                text = "还没有已完成的任务。完成与收款互相独立，可以先完成或先收款。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -621,12 +764,23 @@ private fun androidx.compose.foundation.lazy.LazyListScope.shortSections(
         }
     }
 
-    item { PaymentPendingCard(priceCents = detail.order.priceCents, mode = detail.order.paymentMode) }
+    item {
+        PaymentSection(
+            detail = detail,
+            canPay = canPay,
+            onRecordPayment = onRecordPayment,
+            onAmendReceipt = onAmendReceipt,
+            onVoidReceipt = onVoidReceipt,
+        )
+    }
 }
 
 @Composable
 private fun OrderSummaryCard(detail: OrderDetail) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(
+        modifier = Modifier.testTag("order-detail-summary"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -842,25 +996,211 @@ private fun HistoryCard(
     }
 }
 
+/**
+ * Current-period debt, historical debt and total debt, plus every receipt grouped by
+ * the period it was explicitly paid against. All numbers come from [OrderDetail.balance].
+ */
 @Composable
-private fun PaymentPendingCard(priceCents: Long?, mode: PaymentMode) {
+private fun PaymentSection(
+    detail: OrderDetail,
+    canPay: Boolean,
+    onRecordPayment: (periodId: String?) -> Unit,
+    onAmendReceipt: (Receipt) -> Unit,
+    onVoidReceipt: (Receipt) -> Unit,
+) {
+    val balance = detail.balance()
+    val current = balance.currentItem
+    val archived = detail.owner.archived || detail.account.archived
+
+    Card(
+        modifier = Modifier.testTag("order-detail-payment-section"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "收款与欠款",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (balance.totalOutstandingCents == 0L) {
+                    StatusTag(text = "已结清")
+                }
+            }
+            if (balance.hosting) {
+                LabeledValue(
+                    label = "本期（第 ${((current?.periodIndex ?: 0) + 1)} 期）应收 / 已收 / 待收",
+                    value = current?.let {
+                        "${Money.formatCents(it.priceCents)} / ${Money.formatCents(it.paidCents)} / " +
+                            Money.formatCents(it.outstandingCents)
+                    } ?: "暂无期次",
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                LabeledValue(
+                    label = "历史欠款（往期未收）",
+                    value = Money.formatCents(balance.historicalOutstandingCents),
+                )
+                LabeledValue(
+                    label = "合计待收",
+                    value = Money.formatCents(balance.totalOutstandingCents),
+                )
+            } else {
+                val item = balance.items.firstOrNull()
+                LabeledValue(
+                    label = "约定总价 / 已收 / 待收",
+                    value = item?.let {
+                        "${Money.formatCents(it.priceCents)} / ${Money.formatCents(it.paidCents)} / " +
+                            Money.formatCents(it.outstandingCents)
+                    } ?: "未填写",
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            LabeledValue(
+                label = "收款方式",
+                value = when (detail.order.paymentMode) {
+                    PaymentMode.ONE_TIME -> "一次结清"
+                    PaymentMode.INSTALLMENTS -> "分批收款"
+                },
+            )
+            if (archived) {
+                Text(
+                    text = "老板或账号已归档：仍可结算欠款、作废或更正收款，但不会恢复任何任务。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            Button(
+                onClick = { onRecordPayment(current?.periodId) },
+                enabled = canPay && balance.receivableItems.isNotEmpty(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
+                Text(if (balance.receivableItems.isEmpty()) "已全部结清" else "记录收款")
+            }
+        }
+    }
+
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "收款记录（第三阶段）", style = MaterialTheme.typography.titleMedium)
+            Text(text = "收款记录（按期次）", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "约定价格 " + (priceCents?.let(Money::formatCents) ?: "未填写") +
-                    " · " + when (mode) {
-                        PaymentMode.ONE_TIME -> "一次结清"
-                        PaymentMode.INSTALLMENTS -> "分批收款"
-                    },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = "本版本不会创建首笔实收、欠款余额或历史收款。旧期次价格已保留，但并未被标记为已收。",
+                text = "共 ${detail.receipts.size} 笔，含已作废与已更正记录；分期收款不会自动抵扣其他期次。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            if (detail.receipts.isEmpty()) {
+                Text(
+                    text = "还没有收款记录。记录收款后，这里会显示实际时间、金额与渠道。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            balance.items.forEach { item ->
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.periodLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = if (item.settled) {
+                            "已结清"
+                        } else {
+                            "待收 ${Money.formatCents(item.outstandingCents)}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                val periodReceipts = detail.receiptsForPeriod(item.periodId)
+                if (periodReceipts.isEmpty()) {
+                    Text(
+                        text = "该期暂无收款。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                periodReceipts.forEach { receipt ->
+                    ReceiptRow(
+                        receipt = receipt,
+                        correctedToCents = detail.correctionFor(receipt.id)?.newAmountCents,
+                        correctionReason = detail.correctionFor(receipt.id)?.reason,
+                        canPay = canPay,
+                        onAmend = { onAmendReceipt(receipt) },
+                        onVoid = { onVoidReceipt(receipt) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReceiptRow(
+    receipt: Receipt,
+    correctedToCents: Long?,
+    correctionReason: String?,
+    canPay: Boolean,
+    onAmend: () -> Unit,
+    onVoid: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = Money.formatCents(receipt.amountCents),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            when (receipt.status) {
+                ReceiptStatus.VOIDED -> StatusTag(text = "已作废")
+                ReceiptStatus.REPLACED -> StatusTag(text = "已更正")
+                ReceiptStatus.ACTIVE -> Unit
+            }
+        }
+        Text(
+            text = "${receipt.channel.label} · 实收时间 ${formatInstant(receipt.receivedAt)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        receipt.note?.let {
+            Text(
+                text = "备注：$it",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (receipt.status == ReceiptStatus.REPLACED) {
+            Text(
+                text = "已更正为 " + (correctedToCents?.let(Money::formatCents) ?: "另一笔记录") +
+                    "，原金额仅保留为历史记录。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (receipt.status == ReceiptStatus.VOIDED) {
+            Text(
+                text = "该笔收款已作废，不计入实收与欠款余额。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!correctionReason.isNullOrBlank()) {
+            Text(
+                text = "更正原因：$correctionReason",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (receipt.effective && canPay) {
+            Row {
+                TextButton(onClick = onAmend) { Text("更正") }
+                TextButton(onClick = onVoid) { Text("作废") }
+            }
         }
     }
 }
@@ -958,7 +1298,13 @@ private fun RenewalDialog(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
                 )
-                PendingPaymentNote()
+                Text(
+                    text = "新期次的实收从零开始，旧期次的价格与收款记录全部保留；" +
+                        "若旧期仍有欠款，续期后仍可单独选择旧期次补收。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         },
         confirmButton = {

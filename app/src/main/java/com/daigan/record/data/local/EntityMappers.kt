@@ -4,6 +4,8 @@ import com.daigan.record.core.time.GameRefreshRules
 import com.daigan.record.data.local.entity.AttachmentEntity
 import com.daigan.record.data.local.entity.HostingPeriodEntity
 import com.daigan.record.data.local.entity.OrderEntity
+import com.daigan.record.data.local.entity.ReceiptCorrectionEntity
+import com.daigan.record.data.local.entity.ReceiptEntity
 import com.daigan.record.data.local.entity.TaskDefinitionEntity
 import com.daigan.record.data.local.entity.TaskOccurrenceEntity
 import com.daigan.record.data.model.Attachment
@@ -11,6 +13,8 @@ import com.daigan.record.data.model.GameRefreshRulesDomain
 import com.daigan.record.data.model.HostingPeriod
 import com.daigan.record.data.model.Order
 import com.daigan.record.data.model.OrderTask
+import com.daigan.record.data.model.Receipt
+import com.daigan.record.data.model.ReceiptCorrectionRecord
 import com.daigan.record.data.model.TaskOccurrence
 import java.time.DayOfWeek
 import java.time.LocalTime
@@ -120,5 +124,37 @@ fun AttachmentEntity.toModel(): Attachment = Attachment(
     relativePath = relativePath,
     mimeType = mimeType,
     sizeBytes = sizeBytes,
+    createdAt = createdAt,
+)
+
+fun ReceiptEntity.toModel(): Receipt = Receipt(
+    id = id,
+    operationId = operationId,
+    orderId = orderId,
+    periodId = periodId,
+    amountCents = amountCents,
+    receivedAt = receivedAt,
+    channel = channel,
+    note = note,
+    status = status,
+    replacedByReceiptId = replacedByReceiptId,
+    createdAt = createdAt,
+)
+
+fun ReceiptCorrectionEntity.toModel(): ReceiptCorrectionRecord = ReceiptCorrectionRecord(
+    id = id,
+    operationId = operationId,
+    receiptId = receiptId,
+    kind = kind,
+    reason = reason,
+    previousAmountCents = previousAmountCents,
+    previousReceivedAt = previousReceivedAt,
+    previousChannel = previousChannel,
+    previousNote = previousNote,
+    newReceiptId = newReceiptId,
+    newAmountCents = newAmountCents,
+    newReceivedAt = newReceivedAt,
+    newChannel = newChannel,
+    newNote = newNote,
     createdAt = createdAt,
 )

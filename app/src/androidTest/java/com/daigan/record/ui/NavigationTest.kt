@@ -1,11 +1,14 @@
 package com.daigan.record.ui
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.daigan.record.MainActivity
@@ -92,11 +95,40 @@ class NavigationTest {
     }
 
     @Test
-    fun statsScreenShowsNoInventedNumbers() {
+    fun statsScreenShowsRealZeroesInsteadOfInventedNumbers() {
         composeTestRule.onNode(bottomNav("数据统计")).performClick()
 
-        composeTestRule.onNodeWithText("暂无统计数据").assertExists()
-        composeTestRule.onAllNodesWithText("¥").assertCountEquals(0)
+        // The income label is calendar-month specific ("2026 年 10 月实收") and the card
+        // only exists once the first real snapshot has loaded, so wait for the card
+        // instead of asserting against the loading indicator.
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithTag("stats-income-label")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag("stats-income-label")
+            .assertTextContains("实收", substring = true)
+        composeTestRule.onNodeWithTag("stats-income-label")
+            .assertTextContains("月", substring = true)
+        composeTestRule.onNodeWithText("全部待收").assertExists()
+        composeTestRule.onNodeWithText("含历史欠款", substring = true).assertExists()
+        composeTestRule.onNodeWithText("全部收齐").assertExists()
+        // Two honest zero amounts: this month's receipts and all-time debt.
+        composeTestRule.onAllNodesWithText("¥0.00").assertCountEquals(2)
+    }
+
+    @Test
+    fun receiptHistoryIsIndependentUnderSettingsAndStartsEmpty() {
+        openAccounts()
+        composeTestRule.onNodeWithContentDescription("设置").performClick()
+        composeTestRule.onNodeWithText("收款明细").performClick()
+
+        composeTestRule.onNodeWithText("全部实收流水", substring = true).assertExists()
+        composeTestRule.onNodeWithText("还没有收款记录").assertExists()
+        // Independent page: no bottom navigation.
+        composeTestRule.onAllNodesWithText("今日事项").assertCountEquals(0)
+
+        composeTestRule.onNodeWithContentDescription("返回").performClick()
+        composeTestRule.onNodeWithText("备份与恢复").assertExists()
     }
 
     private fun openAccounts() {

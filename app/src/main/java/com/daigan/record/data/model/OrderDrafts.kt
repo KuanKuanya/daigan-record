@@ -4,8 +4,10 @@ import com.daigan.record.core.time.GameCalendar
 import com.daigan.record.core.time.GameRefreshRules
 import java.math.BigDecimal
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 
 /** One task row in the order-creation form. Values stay textual until submission. */
 data class TaskDraft(
@@ -28,6 +30,26 @@ data class TaskDraft(
     }
 }
 
+/**
+ * Optional first receipt captured together with order creation. [operationId] is
+ * generated once by the ViewModel and reused on retry, so a resubmission or double tap
+ * cannot create two payments. A blank amount means "no receipt".
+ *
+ * [receivedAt] is the **actual** moment the money arrived, which is deliberately
+ * separate from the recording time. It may be a historical timestamp (for example an
+ * order created in October whose first payment actually arrived in September) and is
+ * normalized to the database's millisecond precision before it becomes part of the
+ * creation command. `null` means "same as the creation time" and is kept stable for
+ * retries without freezing an arbitrary wall-clock value into the command.
+ */
+data class InitialPaymentDraft(
+    val amountYuan: String,
+    val channel: PaymentChannel = PaymentChannel.WECHAT,
+    val note: String = "",
+    val operationId: String,
+    val receivedAt: Instant? = null,
+)
+
 data class ShortOrderDraft(
     val ownerId: String,
     val accountId: String,
@@ -37,6 +59,13 @@ data class ShortOrderDraft(
     val deadlineDate: LocalDate? = null,
     val notes: String = "",
     val tasks: List<TaskDraft> = listOf(TaskDraft()),
+    val initialPayment: InitialPaymentDraft? = null,
+    /**
+     * Identity of the whole create command. Callers that retry must reuse the same
+     * value; a genuinely new order must use a new one. The default is only a
+     * convenience for tests and one-shot callers.
+     */
+    val creationOperationId: String = UUID.randomUUID().toString(),
 ) {
     val priceCentsOrNull: Long? get() = Money.parseYuanToCentsOrNull(priceYuan)
 
@@ -55,6 +84,7 @@ data class ShortOrderDraft(
         tasks.forEachIndexed { index, task ->
             task.validate(index, errors)
         }
+        initialPayment?.validate(priceCentsOrNull, paymentMode, "约定总价", errors)
         return errors
     }
 
@@ -76,6 +106,9 @@ data class HostingOrderDraft(
     val notes: String = "",
     val refresh: GameRefreshRules = GameRefreshRules.provisional(),
     val tasks: List<TaskDraft> = listOf(TaskDraft()),
+    val initialPayment: InitialPaymentDraft? = null,
+    /** Stable identity of the whole create command; see [ShortOrderDraft]. */
+    val creationOperationId: String = UUID.randomUUID().toString(),
 ) {
     val priceCentsOrNull: Long? get() = Money.parseYuanToCentsOrNull(priceYuan)
 
@@ -113,6 +146,7 @@ data class HostingOrderDraft(
         if (weeklyTasks.isNotEmpty()) {
             // Weekly tasks use the order refresh snapshot; no extra field is required.
         }
+        initialPayment?.validate(priceCentsOrNull, paymentMode, "本期约定价格", errors)
         return errors
     }
 
@@ -148,6 +182,45 @@ private fun TaskDraft.validate(index: Int, errors: MutableMap<String, String>) {
 }
 
 const val MAX_TASK_TITLE_LENGTH = 40
+
+/**
+ * Shared validation so the form and the repository reject the same amounts. The
+ * repository re-checks inside the transaction; this only makes the error visible early.
+ */
+private fun InitialPaymentDraft.validate(
+    priceCents: Long?,
+    paymentMode: PaymentMode,
+    priceLabel: String,
+    errors: MutableMap<String, String>,
+) {
+    if (operationId.isBlank()) {
+        errors["initialPayment"] = "操作标识不能为空"
+        return
+    }
+    if (note.trim().length > RECEIPT_NOTE_MAX_LENGTH) {
+        errors["initialPayment"] = "首笔收款备注最多 $RECEIPT_NOTE_MAX_LENGTH 个字符"
+        return
+    }
+    val amount = if (amountYuan.isBlank()) {
+        errors["initialPayment"] = "请填写首笔实收金额，或关闭首笔实收"
+        return
+    } else {
+        Money.parsePositiveYuanToCentsOrNull(amountYuan)
+    }
+    if (amount == null) {
+        errors["initialPayment"] = "首笔实收需为大于 0 且最多两位小数的金额"
+        return
+    }
+    if (priceCents == null) return
+    if (amount > priceCents) {
+        errors["initialPayment"] = "首笔实收不能超过$priceLabel ${Money.formatCents(priceCents)}"
+        return
+    }
+    if (paymentMode == PaymentMode.ONE_TIME && amount != priceCents) {
+        errors["initialPayment"] =
+            "一次结清需在建单时收齐$priceLabel ${Money.formatCents(priceCents)}"
+    }
+}
 
 fun TaskDraft.normalizedValues(): Triple<BigDecimal, BigDecimal, BigDecimal> {
     val start = startDecimal() ?: BigDecimal.ZERO

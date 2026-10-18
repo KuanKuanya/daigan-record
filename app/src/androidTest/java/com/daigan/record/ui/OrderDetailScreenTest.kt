@@ -2,7 +2,9 @@ package com.daigan.record.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -58,6 +60,10 @@ class OrderDetailScreenTest {
                     fileFor = { File("/does-not-exist") },
                     onBackfill = {},
                     onRenewClick = {},
+                    onRecordPayment = {},
+                    onAmendReceipt = {},
+                    onVoidReceipt = {},
+                    paymentInFlight = false,
                 )
             }
         }
@@ -79,15 +85,24 @@ class OrderDetailScreenTest {
     }
 
     @Test
-    fun shortDetailShowsTasksPriceAndAPendingPaymentSection() {
+    fun shortDetailShowsTasksPriceAndARealPaymentSection() {
         setContent(shortOrderDetailForUi())
 
         composeTestRule.onNodeWithText("推进主线").assertExists()
         composeTestRule.onNodeWithText("¥100.00").assertExists()
-        composeTestRule.onNodeWithText("分批收款").assertExists()
+        // "分批收款" appears in both the order summary and the financial card. Scope the
+        // checks to those regions instead of deleting the assertion or accepting any one.
+        composeTestRule.onNode(
+            hasText("分批收款") and hasAnyAncestor(hasTestTag("order-detail-summary")),
+        ).assertExists()
+        composeTestRule.onNode(
+            hasText("分批收款") and hasAnyAncestor(hasTestTag("order-detail-payment-section")),
+        ).assertExists()
         composeTestRule.onNodeWithText("整单完成").assertExists()
-        composeTestRule.onNodeWithText("收款记录（第三阶段）").assertExists()
-        composeTestRule.onNodeWithText("本版本不会创建首笔实收", substring = true).assertExists()
+        composeTestRule.onNodeWithText("收款与欠款").assertExists()
+        composeTestRule.onNodeWithText("¥100.00 / ¥0.00 / ¥100.00").assertExists()
+        composeTestRule.onNodeWithText("记录收款").assertExists()
+        composeTestRule.onNodeWithText("还没有收款记录", substring = true).assertExists()
         composeTestRule.onNodeWithText("添加截图").assertExists()
     }
 
@@ -99,7 +114,12 @@ class OrderDetailScreenTest {
         composeTestRule.onNodeWithText("续期").assertExists()
         composeTestRule.onNodeWithText("本期打卡记录").assertExists()
         composeTestRule.onNodeWithText("补录/更正").assertExists()
-        composeTestRule.onNodeWithText("¥300.00").assertExists()
+        // The price is shown in the order summary and the outstanding total is a second
+        // identical amount. Both are real; assert each in its own region.
+        composeTestRule.onNode(
+            hasText("¥300.00") and hasAnyAncestor(hasTestTag("order-detail-summary")),
+        ).assertExists()
+        composeTestRule.onNodeWithText("¥300.00 / ¥0.00 / ¥300.00").assertExists()
         composeTestRule.onNodeWithText("整单完成").assertDoesNotExist()
         composeTestRule.onNodeWithText("到期后不再生成新任务", substring = true).assertExists()
     }
@@ -137,6 +157,10 @@ class OrderDetailScreenTest {
                         fileFor = { File("/does-not-exist") },
                         onBackfill = {},
                         onRenewClick = {},
+                        onRecordPayment = {},
+                        onAmendReceipt = {},
+                        onVoidReceipt = {},
+                        paymentInFlight = false,
                     )
                 }
             }

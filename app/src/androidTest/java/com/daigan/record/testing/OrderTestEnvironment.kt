@@ -26,7 +26,11 @@ import com.daigan.record.data.repository.DefaultAttachmentRepository
 import com.daigan.record.data.repository.DefaultGameAccountRepository
 import com.daigan.record.data.repository.DefaultOrderRepository
 import com.daigan.record.data.repository.DefaultOwnerRepository
+import com.daigan.record.data.repository.DefaultReceiptRepository
+import com.daigan.record.data.repository.DefaultStatisticsRepository
 import com.daigan.record.data.repository.DisplayedHostingSnapshot
+import com.daigan.record.data.repository.LedgerSnapshotSource
+import com.daigan.record.data.repository.ReceiptLedger
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -202,6 +206,10 @@ class OrderTestEnvironment(
     val accountRepository: DefaultGameAccountRepository
     val orderRepository: DefaultOrderRepository
     val attachmentRepository: DefaultAttachmentRepository
+    val receiptLedger: ReceiptLedger
+    val receiptRepository: DefaultReceiptRepository
+    val statisticsRepository: DefaultStatisticsRepository
+    val ledgerSnapshotSource: LedgerSnapshotSource
     private val dbName = databaseName
 
     init {
@@ -229,6 +237,11 @@ class OrderTestEnvironment(
             orderDao = database.orderDao(),
             timeProvider = clock,
         )
+        receiptLedger = ReceiptLedger(
+            receiptDao = database.receiptDao(),
+            orderDao = database.orderDao(),
+            timeProvider = clock,
+        )
         orderRepository = DefaultOrderRepository(
             database = database,
             orderDao = database.orderDao(),
@@ -238,8 +251,24 @@ class OrderTestEnvironment(
             attachmentDao = database.attachmentDao(),
             accountDao = database.gameAccountDao(),
             ownerDao = database.ownerDao(),
+            receiptDao = database.receiptDao(),
+            receiptLedger = receiptLedger,
+            creationOperationDao = database.creationOperationDao(),
             ticker = ticker,
         )
+        ledgerSnapshotSource = LedgerSnapshotSource(
+            database = database,
+            orderDao = database.orderDao(),
+            receiptDao = database.receiptDao(),
+            accountDao = database.gameAccountDao(),
+            ownerDao = database.ownerDao(),
+        )
+        receiptRepository = DefaultReceiptRepository(
+            database = database,
+            ledger = receiptLedger,
+            snapshotSource = ledgerSnapshotSource,
+        )
+        statisticsRepository = DefaultStatisticsRepository(ledgerSnapshotSource)
         attachmentRepository = DefaultAttachmentRepository(
             context = context,
             database = database,

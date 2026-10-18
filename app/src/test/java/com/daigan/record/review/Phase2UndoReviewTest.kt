@@ -19,6 +19,7 @@ import com.daigan.record.data.repository.OrderRepository
 import com.daigan.record.feature.orders.OrderDetailViewModel
 import com.daigan.record.feature.today.TodayViewModel
 import com.daigan.record.testing.FakeOrderRepository
+import com.daigan.record.testing.FakeReceiptRepository
 import com.daigan.record.testing.FixedTimeProvider
 import com.daigan.record.testing.MainDispatcherRule
 import com.daigan.record.testing.account
@@ -145,8 +146,19 @@ class Phase2UndoReviewTest {
             PaymentMode.ONE_TIME, null, null, rules, fixedInstant, null)
         val period = HostingPeriod("period", "order", 0, date, date.plusDays(5), 100,
             rules, fixedInstant, null)
-        val detail = OrderDetail(order, owner(), account(), emptyList(), if (order.isHosting) listOf(period) else emptyList(),
-            emptyList(), emptyList(), date, fixedInstant)
+        val detail = OrderDetail(
+            order,
+            owner(),
+            account(),
+            emptyList(),
+            if (order.isHosting) listOf(period) else emptyList(),
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            date,
+            fixedInstant,
+        )
         val fake = FakeOrderRepository()
         fake.details.value = mapOf("order" to detail)
         fake.hosting.value = listOf(TodayHostingOrder(order, "owner-1", "001", "test",
@@ -176,7 +188,13 @@ class Phase2UndoReviewTest {
             override fun fileFor(attachment: Attachment): File = error("unused")
             override suspend fun cleanupOrphans() = 0
         }
-        val vm = OrderDetailViewModel(SavedStateHandle(mapOf(Routes.ORDER_ID_ARG to "order")), repository, attachments)
+        val vm = OrderDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf(Routes.ORDER_ID_ARG to "order")),
+            orderRepository = repository,
+            attachmentRepository = attachments,
+            receiptRepository = FakeReceiptRepository(),
+            timeProvider = FixedTimeProvider(),
+        )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { today.uiState.collect() }
         runCurrent()
         fun complete() = when (entry) {

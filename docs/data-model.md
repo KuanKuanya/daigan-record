@@ -1,7 +1,7 @@
-# 数据模型（Phase 1 + Phase 2 已实现）
+# 数据模型（Phase 1 + Phase 2 + Phase 3 已实现）
 
 Room/SQLite 是业务资料唯一事实来源。本文件只描述**已经实现并经过迁移测试**的表；
-收款流水、游戏模板库、提醒与备份仍属于后续阶段，未创建空表，也没有占位实现。
+游戏模板库、提醒与备份仍属于后续阶段，未创建空表，也没有占位实现。
 
 Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`。
 
@@ -9,10 +9,13 @@ Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`
 |---|---|---|
 | 1 | `1.json` | **只读历史夹具**，不再修改 |
 | 2 | `2.json` | **只读历史夹具**，Phase 1 验收基线 |
-| 3 | `3.json` | 当前生产版本（Phase 2） |
+| 3 | `3.json` | **只读历史夹具**，Phase 2 验收基线 |
+| 4 | `4.json` | 历史版本：Phase 3 首版收款表 |
+| 5 | `5.json` | 当前生产版本（Phase 3 修复） |
 
 `exportSchema = true`，没有 `fallbackToDestructiveMigration`。生产构建通过
-`RecordDatabase.ALL_MIGRATIONS` 注册 `MIGRATION_1_2` 与 `MIGRATION_2_3`。
+`RecordDatabase.ALL_MIGRATIONS` 注册 `MIGRATION_1_2`、`MIGRATION_2_3`、
+`MIGRATION_3_4` 与 `MIGRATION_4_5`。
 
 类型转换器：
 
@@ -179,7 +182,91 @@ Phase 2 新增的**归档守卫**（见第 4 节）在归档老板/账号时要�
 `taskDefinitionId` 与 `occurrenceId` 必须恰好一个非空（仓储层校验）。
 外键均 `RESTRICT`。数据库不保存 Base64，也不保存外部 URI。
 
-## 3. 日期与周期语义（实现于 `core/time/GameCalendar.kt`、`data/model/OccurrenceRules.kt`）
+## 3. Phase 3 表（数据库版本 4 → 5）
+
+### `receipts` — 实收流水
+
+一条收款行代表**实际收到**的一笔钱。金额只来自用户输入，绝不从约定价格、完成状态
+或期次推算。
+
+| 列 | 类型 | 约束 / 语义 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `operationId` | TEXT | 非空，唯一索引；收款命令的幂等键 |
+| `orderId` | TEXT | → `orders.id`，`RESTRICT`，索引 |
+| `periodId` | TEXT | 可空，→ `hosting_periods.id`，`RESTRICT`，索引；托管收款必填，短期单必须为 NULL |
+| `amountCents` | INTEGER | 整数分，1 … `Money.MAX_CENTS`（99,999,999.99 元） |
+| `receivedAt` | INTEGER | **实际到账时刻**（epoch 毫秒，UTC），可早于录入时间 |
+| `channel` | TEXT | `WECHAT` / `ALIPAY` / `BANK` / `CASH` / `OTHER` |
+| `note` | TEXT | 可空；仅 `OTHER` 保存用户备注，其他渠道为 NULL |
+| `status` | TEXT | `ACTIVE` / `REPLACED` / `VOIDED` |
+| `replacedByReceiptId` | TEXT | 可空；`REPLACED` 指向替换行 |
+| `createdAt` | INTEGER | 录入时刻（与 `receivedAt` 明确分离） |
+
+### `receipt_corrections` — 更正审计
+
+更正**不删除**原收款行。VOID 把原行置为 `VOIDED`；AMEND 插入一条新的 `ACTIVE`
+行并把原行置为 `REPLACED`。审计行保存前后值，历史永远可读。
+
+| 列 | 类型 | 语义 |
+|---|---|---|
+| `id` | TEXT | 主键 |
+| `operationId` | TEXT | 非空，唯一索引；更正命令的幂等键 |
+| `receiptId` | TEXT | → `receipts.id`；被更正的原收款 |
+| `kind` | TEXT | `AMEND` / `VOID` |
+| `reason` | TEXT | 可空；**参与幂等冲突判定**的审计原因 |
+| `previousAmountCents` / `previousReceivedAt` / `previousChannel` / `previousNote` | | 更正前快照 |
+| `newReceiptId` | TEXT | 可空；AMEND 生成的新收款行 |
+| `newAmountCents` / `newReceivedAt` / `newChannel` / `newNote` | | AMEND 后快照；VOID 全为 NULL |
+| `createdAt` | INTEGER | 更正录入时刻 |
+
+### `order_creation_operations` — 建单命令结果（版本 5 新增）
+
+| 列 | 类型 | 约束 / 语义 |
+|---|---|---|
+| `operationId` | TEXT | 主键；整条建单命令的稳定标识 |
+| `orderType` | TEXT | `SHORT_TASK` / `HOSTING`；必须与重试请求一致 |
+| `fingerprint` | TEXT | 规范化请求指纹；决定“同一命令”还是“冲突载荷” |
+| `orderId` | TEXT | → `orders.id`，`RESTRICT`，索引；命令的存储结果 |
+| `receiptId` | TEXT | 可空；首笔实收的存储结果 |
+| `createdAt` | INTEGER | 命令首次成功提交时刻 |
+
+**没有为历史订单补写本表。** v3/v4 的订单在幂等机制之前创建，伪造一个
+`operationId` 会把它们误认为某次新命令的重试。
+
+### 有效收款与欠款（实收语义）
+
+- 只有 `status = ACTIVE` 的收款计入实收；`REPLACED` / `VOIDED` 为 0。
+- 短期单：一件应收 = 订单 `priceCents`，`paid = Σ ACTIVE receipts(periodId IS NULL)`。
+- 托管单：每期一件应收 = 该期 `priceCents`，
+  `paid = Σ ACTIVE receipts(periodId = 该期)`；价格属于期次，续期不会改写旧期。
+- `outstanding = max(0, price - paid)`；只有 `outstanding > 0` 的款项进入待收列表。
+- 实收统计按 `receivedAt` 落在报表时区窗口内汇总；欠款是**全时段**未收金额，
+  不受月份筛选影响。
+- 归档、已完成与已到期订单的欠款仍可收取；工作写入（任务/打卡/批量）仍被归档守卫拒绝。
+- 续期保留旧期欠款与旧流水，新期从零流水开始，`orders` 行数不增加。
+
+### 幂等、时间精度与并发
+
+| 命令 | 幂等键 | 相同重试 | 冲突载荷 |
+|---|---|---|---|
+| 建单（含首笔） | `order_creation_operations.operationId` | 返回原订单/原收款 | 拒绝（`CREATION_CONFLICT_MESSAGE`） |
+| 收款 | `receipts.operationId` | 返回原收款 `alreadyApplied=true` | 拒绝 |
+| 更正 | `receipt_corrections.operationId` | 返回原审计，历史不增行 | 拒绝（含不同 `reason`） |
+| 续期 | `hosting_periods.renewalOperationId` | 返回原期次 | 拒绝 |
+| 批量完成 | `completion_batches.operationId` | 返回原批次 | 拒绝 |
+
+- 时间统一为 **epoch 毫秒**（`PersistedInstant.normalize`）：写入、规范化命令、
+  请求指纹、重试比较与返回值使用同一精度。亚毫秒 `Instant` 在重试时不会误判冲突。
+- 收款比较字段：订单、期次、金额、`receivedAt`（毫秒）、渠道、规范化备注。
+- 更正比较字段：原收款、类型、金额、`receivedAt`（毫秒）、渠道、备注、审计原因。
+- 建单在**一个事务**内写入操作结果、订单、任务、托管期次与可选首笔收款；
+  任一校验或收款失败导致整体回滚。
+- 并发相同命令由唯一索引兜底：落败事务回滚后读取获胜事务的已提交结果。
+- `receivedAt` 是**实际到账**时间，允许历史值；`now` 只用于“不能晚于当前时间”的
+  校验与 `createdAt` 录入时间。
+
+## 4. 日期与周期语义（实现于 `core/time/GameCalendar.kt`、`data/model/OccurrenceRules.kt`）
 
 三个概念严格区分：
 
@@ -213,7 +300,7 @@ Phase 2 新增的**归档守卫**（见第 4 节）在归档老板/账号时要�
 - 刷新后续期：新期从当天游戏日开始。
 - 任何情况下都只生成 `startDate` 及之后的发生记录，不会回溯到旧期或新期开始日前。
 
-## 4. 仓储接口与事务边界
+## 5. 仓储接口与事务边界
 
 ```kotlin
 interface OrderRepository {
@@ -254,6 +341,23 @@ interface AttachmentRepository {
     fun fileFor(attachment: Attachment): File
     suspend fun cleanupOrphans(): Int
 }
+
+interface ReceiptRepository {
+    fun observeReceiptHistory(): Flow<List<ReceiptHistoryEntry>>
+    suspend fun recordPayment(request: PaymentRequest): PaymentResult
+    suspend fun correctReceipt(request: ReceiptCorrectionRequest): CorrectionResult
+}
+
+interface StatisticsRepository {
+    fun observeStatistics(range: StatisticsRange, zone: ZoneId, now: Instant): Flow<Statistics>
+    suspend fun loadStatistics(range: StatisticsRange, zone: ZoneId, now: Instant): Statistics
+}
+
+/** Transactionally consistent read model shared by stats and receipt history. */
+class LedgerSnapshotSource {
+    fun observe(): Flow<LedgerSnapshot>
+    suspend fun load(): LedgerSnapshot
+}
 ```
 
 所有写操作在 `database.withTransaction` 中完成，并在事务内重新读取并校验：
@@ -287,7 +391,31 @@ interface AttachmentRepository {
 - 从旧期任务复制为**新 ID** 的任务快照，完成状态与当前值重置，旧期数据不动。
 - 订单数量不增加，订单 ID 不变；旧期价格保留但不声称已收款。
 
-## 5. 截图文件与失败处理
+**收款与更正**：
+
+- 收款、更正、建单首笔收款共用 `ReceiptLedger`：先做幂等比较，再校验余额与关系，
+  最后在事务内写入。重试发生在余额校验之前，因此“已结清后的相同重试”仍返回原收款。
+- 托管收款必须显式给出属于该订单的 `periodId`；短期单收款不得携带期次。
+  期次属于别的订单、缺失期次或短期单带期次都会被拒绝，且不写入任何行。
+- 金额使用整数分；精度超过两位、为 0、为负或超过上限的输入在写库前拒绝。
+  `ONE_TIME` 只接受“恰好结清当前款项”的金额；`INSTALLMENTS` 接受不超过余额的部分收款。
+- AMEND 的可收上限 = 该款项价格 − 其他有效收款；超过上限拒绝。
+- 更正审计行与状态变更在同一事务内完成；重试相同更正返回原审计，不新增行。
+
+**财务快照一致性**：
+
+- `LedgerSnapshotSource` 不再 `combine` 多个独立 DAO Flow，而是在**一个**
+  `database.withTransaction` 中读取订单、期次、收款、更正、账号与老板。
+- Room 的表失效仍会触发重读（六张表的失效信号合并），任何写入后都会得到一个新的
+  完整版本；没有 debounce/延迟掩盖竞态。
+- 统计页、收款明细页与订单详情都从同一份快照派生，因此同一次提交在三个页面上的
+  实收/欠款一致。
+- 报表时区：月份窗口按用户时区计算 `[startInclusive, endExclusive)`；实收按
+  `receivedAt` 归属，订单数量按 `createdAt` 归属，欠款为全时段金额。
+- 归档只影响“工作写入”，不影响读模型与收款；已完成/已到期/已归档订单的欠款
+  仍在待收列表中，并可继续收款。
+
+## 6. 截图文件与失败处理
 
 - 来源：`ActivityResultContracts.PickVisualMedia`（系统照片选择器），不申请宽泛存储权限。
 - 流程：读取 `contentResolver` → 写入 `files/attachments/<uuid>.tmp` → 移动/复制为
@@ -299,21 +427,29 @@ interface AttachmentRepository {
 - 取消选择（`null` URI）或来源不可读：不写任何行，不产生“成功但损坏”的附件。
 - 清理只删除未被引用的最终文件与超过 1 小时的临时文件。
 
-## 6. 迁移与测试
+## 7. 迁移与测试
 
 - `MIGRATION_1_2`：两条 `ALTER TABLE ... ADD COLUMN archiveBatchId TEXT`，不重写数据。
 - `MIGRATION_2_3`：创建 7 张 Phase 2 表、全部显式命名索引与外键；不修改任何旧行。
+- `MIGRATION_3_4`：只创建 `receipts` 与 `receipt_corrections`（含唯一索引、外键、
+  `replacedByReceiptId` 索引）。**不插入任何收款行**：历史订单的约定价格不等于已收。
+- `MIGRATION_4_5`：只创建 `order_creation_operations`（唯一索引 + 指向 `orders` 的
+  `RESTRICT` 外键）。**不为历史订单补写**操作行。
 - `MigrationV1ToV2Test`：用提交的 `1.json` 建 v1 库，写入真实行，执行全部迁移到当前
   版本；编号、凭据、归档时间保留，批次列为 NULL；生产同款 builder 打开旧库。
 - `MigrationV2ToV3Test`：用提交的 `2.json` 建 v2 库，含显式 `archiveBatchId`；升级后
   旧行逐字段保留，新表为空；新外键 `RESTRICT` 生效。
+- `MigrationV3ToV5Test`：用提交的 `3.json` 建 v3 库，写入真实老板、账号、短期/托管
+  订单、期次、任务、发生记录、完成批次/明细与附件引用；升级后逐项保留，三类新表为空，
+  新外键生效。另有 `4.json` → v5 用例，确认既有订单不会得到虚构的建单操作行。
 - `MigrationInfrastructureTest`：遍历 1..当前版本的所有导出 schema，升级并校验数据。
 - 真实 Room 测试见 `OrderRepositoryTest`、`HostingOccurrenceTest`、
-  `BatchCompletionTest`、`RenewalTest`、`AttachmentTest`。
+  `BatchCompletionTest`、`RenewalTest`、`AttachmentTest`、
+  `Phase3FinancialContractTest`、`LedgerSnapshotConsistencyTest` 与
+  `Phase3AcceptanceReviewTest`。
 
-## 7. 尚未实现（不是本阶段的隐含承诺）
+## 8. 尚未实现（不是本阶段的隐含承诺）
 
-- 收款流水、欠款、实收统计与期次归属选择（Phase 3）。本阶段只保存约定价格/收款方式，
-  没有 `receipts` 表，也不会把旧期次标记为已收。
 - 游戏模板库、模板编辑/导入导出（Phase 4）。当前刷新规则是用户自填的临时值。
 - 系统通知/提醒、备份与恢复、加密、应用锁（后续阶段/产品明确不需要）。
+- 导出/分享报表、跨设备同步、云服务与发布签名（不在 Phase 3 范围）。

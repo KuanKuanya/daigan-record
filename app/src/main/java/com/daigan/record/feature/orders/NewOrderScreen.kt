@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -48,7 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.daigan.record.data.model.Money
 import com.daigan.record.data.model.OrderType
+import com.daigan.record.data.model.PaymentChannel
 import com.daigan.record.data.model.PaymentMode
 import com.daigan.record.data.model.ProgressType
 import com.daigan.record.data.model.RecurrenceType
@@ -85,6 +88,11 @@ fun NewOrderScreen(
         onTitle = viewModel::updateTitle,
         onPrice = viewModel::updatePrice,
         onPaymentMode = viewModel::selectPaymentMode,
+        onInitialPaymentEnabled = viewModel::setInitialPaymentEnabled,
+        onInitialAmount = viewModel::updateInitialAmount,
+        onInitialChannel = viewModel::selectInitialChannel,
+        onInitialNote = viewModel::updateInitialNote,
+        onInitialReceivedAt = viewModel::updateInitialReceivedAt,
         onNotes = viewModel::updateNotes,
         onDeadline = viewModel::setDeadline,
         onStartDate = viewModel::setStartDate,
@@ -112,6 +120,11 @@ internal fun NewOrderScreen(
     onTitle: (String) -> Unit,
     onPrice: (String) -> Unit,
     onPaymentMode: (PaymentMode) -> Unit,
+    onInitialPaymentEnabled: (Boolean) -> Unit,
+    onInitialAmount: (String) -> Unit,
+    onInitialChannel: (PaymentChannel) -> Unit,
+    onInitialNote: (String) -> Unit,
+    onInitialReceivedAt: (Instant) -> Unit,
     onNotes: (String) -> Unit,
     onDeadline: (LocalDate?) -> Unit,
     onStartDate: (LocalDate) -> Unit,
@@ -314,7 +327,14 @@ internal fun NewOrderScreen(
                                 label = { Text("分批收款") },
                             )
                         }
-                        PendingPaymentNote()
+                        InitialPaymentEditor(
+                            state = uiState,
+                            onEnabled = onInitialPaymentEnabled,
+                            onAmount = onInitialAmount,
+                            onChannel = onInitialChannel,
+                            onNote = onInitialNote,
+                            onReceivedAt = onInitialReceivedAt,
+                        )
                     }
 
                     item {
@@ -371,15 +391,110 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * Optional first receipt captured with the order. It stays off by default so existing
+ * unpaid creation behaviour is unchanged; the repository writes it in the same
+ * transaction as the order.
+ */
 @Composable
-internal fun PendingPaymentNote() {
+private fun InitialPaymentEditor(
+    state: NewOrderUiState,
+    onEnabled: (Boolean) -> Unit,
+    onAmount: (String) -> Unit,
+    onChannel: (PaymentChannel) -> Unit,
+    onNote: (String) -> Unit,
+    onReceivedAt: (Instant) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "建单同时录入首笔实收", style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = "关闭时订单保持未收款，可稍后在详情中记录。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = state.initialPaymentEnabled, onCheckedChange = onEnabled)
+    }
+    if (!state.initialPaymentEnabled) return
+
+    OutlinedTextField(
+        value = state.initialAmountYuan,
+        onValueChange = onAmount,
+        label = { Text("首笔实收（元）") },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    )
     Text(
-        text = "收款记录将在第三阶段提供：本版本只保存约定价格与收款方式，" +
-            "不会创建首笔实收、余额或任何虚构流水。",
+        text = "实际到账时间（默认现在，可补记过去；与录入时间分开统计）",
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
     )
+    InstantFields(
+        instant = Instant.ofEpochMilli(state.initialReceivedAtMillis),
+        onInstant = onReceivedAt,
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 4.dp),
+    ) {
+        PaymentChannel.entries.forEach { channel ->
+            FilterChip(
+                selected = state.initialChannel == channel,
+                onClick = { onChannel(channel) },
+                label = { Text(channel.label) },
+            )
+        }
+    }
+    if (state.initialChannel == PaymentChannel.OTHER) {
+        OutlinedTextField(
+            value = state.initialNote,
+            onValueChange = onNote,
+            label = { Text("收款备注（选填，仅“其他”渠道）") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+        )
+    }
+    val price = state.priceCentsOrNull
+    val initial = state.initialCentsOrNull
+    val summary = when {
+        price == null -> "请先填写有效的约定价格。"
+        initial == null -> "请输入大于 0 且最多两位小数的首笔金额。"
+        initial > price -> "首笔实收不能超过约定价格 ${Money.formatCents(price)}。"
+        else -> "约定 ${Money.formatCents(price)} · 首笔实收 ${Money.formatCents(initial)} · " +
+            "建单后待收 ${Money.formatCents(price - initial)}"
+    }
+    Text(
+        text = summary,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (price != null && initial != null && initial <= price) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.error
+        },
+        modifier = Modifier.padding(top = 6.dp),
+    )
+    if (state.paymentMode == PaymentMode.ONE_TIME &&
+        price != null &&
+        initial != null &&
+        initial != price
+    ) {
+        Text(
+            text = "收款方式为“一次结清”：首笔实收需与约定价格一致。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

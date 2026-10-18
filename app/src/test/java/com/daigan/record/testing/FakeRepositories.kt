@@ -8,12 +8,19 @@ import com.daigan.record.data.model.LoginMethod
 import com.daigan.record.data.model.Owner
 import com.daigan.record.data.model.OwnerDetail
 import com.daigan.record.data.model.OwnerSummary
+import com.daigan.record.data.model.CorrectionResult
+import com.daigan.record.data.model.PaymentRequest
+import com.daigan.record.data.model.PaymentResult
+import com.daigan.record.data.model.ReceiptCorrectionRequest
+import com.daigan.record.data.model.ReceiptHistoryEntry
 import com.daigan.record.data.repository.GameAccountRepository
 import com.daigan.record.data.repository.OwnerRepository
+import com.daigan.record.data.repository.ReceiptRepository
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 val fixedInstant: Instant = Instant.parse("2026-10-17T02:00:00Z")
@@ -148,6 +155,23 @@ class FakeGameAccountRepository : GameAccountRepository {
 /** Exposes the repository flows for assertions without extra test utilities. */
 fun OwnerRepository.activeOwnerIds(): Flow<List<String>> =
     observeActiveOwners().map { owners -> owners.map { it.owner.id } }
+
+/**
+ * Financial fake for ViewModel tests that only exercise order-detail actions. A test
+ * that needs real money guarantees uses the real Room environment instead.
+ */
+class FakeReceiptRepository : ReceiptRepository {
+    val recordedRequests = mutableListOf<PaymentRequest>()
+    val corrections = mutableListOf<ReceiptCorrectionRequest>()
+
+    override fun observeReceiptHistory(): Flow<List<ReceiptHistoryEntry>> = flowOf(emptyList())
+
+    override suspend fun recordPayment(request: PaymentRequest): PaymentResult =
+        error("FakeReceiptRepository cannot record payments; use the Room environment")
+
+    override suspend fun correctReceipt(request: ReceiptCorrectionRequest): CorrectionResult =
+        error("FakeReceiptRepository cannot correct receipts; use the Room environment")
+}
 
 class FakeOrderRepository : com.daigan.record.data.repository.OrderRepository {
     val hosting = MutableStateFlow<List<com.daigan.record.data.model.TodayHostingOrder>>(emptyList())

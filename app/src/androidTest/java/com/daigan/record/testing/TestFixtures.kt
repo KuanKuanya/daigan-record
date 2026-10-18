@@ -282,6 +282,8 @@ fun shortOrderDetailForUi(): com.daigan.record.data.model.OrderDetail {
         periods = emptyList(),
         occurrences = emptyList(),
         attachments = emptyList(),
+        receipts = emptyList(),
+        receiptCorrections = emptyList(),
         today = today,
         now = fixedInstant,
     )
@@ -365,6 +367,8 @@ private fun hostingDetailForUi(
         periods = listOf(period),
         occurrences = emptyList(),
         attachments = emptyList(),
+        receipts = emptyList(),
+        receiptCorrections = emptyList(),
         today = today,
         now = fixedInstant,
     )
