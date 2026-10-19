@@ -26,10 +26,14 @@ jobs:
           cache: gradle
       - name: Set up Android SDK tools
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
       - name: Install Android SDK packages
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
-      - name: Build, unit tests and lint
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+      - name: Build and unit tests
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Lint
+        run: ./gradlew :app:lintDebug --stacktrace --no-parallel --max-workers=2
       - name: Upload debug APK
         uses: actions/upload-artifact@v5
         with:
