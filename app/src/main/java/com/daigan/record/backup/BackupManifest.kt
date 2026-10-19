@@ -105,7 +105,7 @@ object BackupManifestCodec {
         }
         val schemaVersion = root.int("schemaVersion")
             ?: throw BackupException("备份清单缺少数据库版本，无法恢复。")
-        if (schemaVersion != currentSchemaVersion) {
+        if (schemaVersion != currentSchemaVersion && !(schemaVersion == 7 && currentSchemaVersion == 8)) {
             throw BackupException(
                 "该备份来自数据版本 $schemaVersion，当前应用只支持版本 $currentSchemaVersion，无法恢复。",
             )

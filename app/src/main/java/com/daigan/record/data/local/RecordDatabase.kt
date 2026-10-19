@@ -63,8 +63,9 @@ import com.daigan.record.data.local.entity.TemplateTaskEntity
  * 6 -> 7 adds the persisted reminder preferences, the local-only dataset identity used
  *       by the restore commit point, and the reminder delivery log. Existing rows are
  *       untouched; reminders stay disabled until the user enables them.
+ * 7 -> 8 adds nullable order cancellation and monthly task day fields, retaining legacy rows.
  */
-const val RECORD_DATABASE_VERSION = 7
+const val RECORD_DATABASE_VERSION = 8
 
 /**
  * The single source of truth for business data.
@@ -685,6 +686,15 @@ abstract class RecordDatabase : RoomDatabase() {
             }
         }
 
+        /** v1.6 adds nullable fields; existing business records keep their identity. */
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `orders` ADD COLUMN `cancelledAt` INTEGER")
+                db.execSQL("ALTER TABLE `task_definitions` ADD COLUMN `monthDay` INTEGER")
+                db.execSQL("ALTER TABLE `template_tasks` ADD COLUMN `monthDay` INTEGER")
+            }
+        }
+
         /** Every migration the app must run; the list is also used by tests. */
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
@@ -693,6 +703,7 @@ abstract class RecordDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
+            MIGRATION_7_8,
         )
     }
 }

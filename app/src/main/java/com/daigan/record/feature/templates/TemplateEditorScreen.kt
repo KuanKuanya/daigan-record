@@ -513,7 +513,14 @@ private fun TaskEditor(
                     }
                 }
 
-                RecurrenceType.EVERY_N_DAYS -> OutlinedTextField(
+                RecurrenceType.MONTHLY -> OutlinedTextField(
+                        value = task.monthDay,
+                        onValueChange = { value -> onUpdate { it.copy(monthDay = value) } },
+                        label = { Text("每月几号（1–31；当月无该日则跳过）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    RecurrenceType.EVERY_N_DAYS -> OutlinedTextField(
                     value = task.everyNDays,
                     onValueChange = { value -> onUpdate { it.copy(everyNDays = value) } },
                     label = { Text("每隔若干天（以托管期开始日为锚点）") },

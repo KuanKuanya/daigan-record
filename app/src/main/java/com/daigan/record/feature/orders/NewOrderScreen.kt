@@ -652,7 +652,7 @@ private fun InitialPaymentEditor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateField(
+internal fun DateField(
     label: String,
     date: LocalDate?,
     onDate: (LocalDate) -> Unit,
@@ -898,6 +898,13 @@ private fun TaskEditor(
                         }
                     }
 
+                    RecurrenceType.MONTHLY -> OutlinedTextField(
+                        value = task.monthDay,
+                        onValueChange = { value -> onChange { it.copy(monthDay = value) } },
+                        label = { Text("每月几号（1–31；当月无该日则跳过）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     RecurrenceType.EVERY_N_DAYS -> {
                         OutlinedTextField(
                             value = task.everyNDays,
@@ -931,6 +938,7 @@ private fun TaskEditor(
 
 private fun recurrenceLabel(type: RecurrenceType): String = when (type) {
     RecurrenceType.ONE_TIME -> "一次性"
+    RecurrenceType.MONTHLY -> "每月固定日号"
     RecurrenceType.DAILY -> "每日"
     RecurrenceType.WEEKLY -> "每周"
     RecurrenceType.SELECTED_WEEKDAYS -> "指定星期"

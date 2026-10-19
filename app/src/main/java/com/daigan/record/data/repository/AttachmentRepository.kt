@@ -226,6 +226,7 @@ class DefaultAttachmentRepository @Inject constructor(
         }
         val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
         val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
+        require(order.cancelledAt == null) { "该订单已作废，不能修改截图" }
         val account = accountDao.findById(order.accountId)
             ?: throw IllegalArgumentException("游戏账号不存在")
         val owner = ownerDao.findById(account.ownerId) ?: throw IllegalArgumentException("老板不存在")

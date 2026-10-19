@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -75,6 +76,7 @@ fun OrderDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var showRenewDialog by rememberSaveable { mutableStateOf(false) }
+    var showDateEditDialog by rememberSaveable { mutableStateOf(false) }
     var renewalOperationId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
 
     // Payment/correction dialog state. Operation ids are created once per dialog and
@@ -102,6 +104,12 @@ fun OrderDetailScreen(
             voidReceiptId = null
             paymentOperationId = UUID.randomUUID().toString()
             correctionOperationId = UUID.randomUUID().toString()
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.maintenanceApplied.collect { deleted ->
+            showDateEditDialog = false
+            if (deleted) onBack()
         }
     }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -172,13 +180,21 @@ fun OrderDetailScreen(
                     voidReceiptId = receipt.id
                 },
                 paymentInFlight = state.paymentInFlight,
+                maintenanceInFlight = state.maintenanceInFlight,
+                onEditDates = { showDateEditDialog = true },
+                onDeleteOrder = viewModel::deleteOrder,
+                onCancelOrder = viewModel::cancelOrder,
                 modifier = Modifier.padding(padding),
             )
         }
     }
 
     val detail = uiState.detail
-    if (showRenewDialog && detail != null && detail.isHosting) {
+    if (showDateEditDialog && detail != null && !detail.order.cancelled) {
+        OrderDateEditDialog(detail, uiState.maintenanceInFlight,
+            onDismiss = { showDateEditDialog = false }, onSave = viewModel::updateOrderDates)
+    }
+    if (showRenewDialog && detail != null && detail.isHosting && !detail.order.cancelled) {
         RenewalDialog(
             detail = detail,
             operationId = renewalOperationId,
@@ -289,17 +305,38 @@ internal fun OrderDetailContent(
     paymentInFlight: Boolean,
     modifier: Modifier = Modifier,
     onCalendarCompletion: ((String, String, java.time.LocalDate, String, Boolean) -> Unit)? = null,
+    onEditDates: () -> Unit = {},
+    onDeleteOrder: () -> Unit = {},
+    onCancelOrder: () -> Unit = {},
+    maintenanceInFlight: Boolean = false,
 ) {
-    val canWrite = !detail.owner.archived && !detail.account.archived
+    val canWrite = !detail.order.cancelled && !maintenanceInFlight && !detail.owner.archived && !detail.account.archived
     // Money stays writable for archived records: debt must remain collectible without
     // reactivating any archived task.
-    val canPay = !paymentInFlight
+    val canPay = !paymentInFlight && !maintenanceInFlight
+    var showManagement by rememberSaveable(detail.order.id) { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(
             title = detail.order.title,
             subtitle = "${detail.owner.nickname} · ${detail.owner.displayNumber} / " +
                 "${detail.account.gameName} · ${detail.account.server}",
             onBack = onBack,
+            actions = {
+                Box {
+                    TextButton(onClick = { showManagement = true }) { Text("管理") }
+                    DropdownMenu(expanded = showManagement, onDismissRequest = { showManagement = false }) {
+                        Box(modifier = Modifier.padding(12.dp)) {
+                            OrderMaintenanceActions(
+                                detail = detail,
+                                onEdit = { showManagement = false; onEditDates() },
+                                onDelete = { showManagement = false; onDeleteOrder() },
+                                onCancel = { showManagement = false; onCancelOrder() },
+                                busy = maintenanceInFlight,
+                            )
+                        }
+                    }
+                }
+            },
         )
         LazyColumn(
             contentPadding = PaddingValues(16.dp),
@@ -794,6 +831,7 @@ private fun OrderSummaryCard(detail: OrderDetail) {
                 )
                 StatusTag(
                     text = when {
+                        detail.order.cancelled -> "已作废"
                         detail.order.isShort && detail.order.completed -> "已完成"
                         detail.order.isShort -> "进行中"
                         detail.currentStatus() == HostingStatus.EXPIRED -> "已到期"
@@ -1077,7 +1115,7 @@ private fun PaymentSection(
                     .fillMaxWidth()
                     .padding(top = 8.dp),
             ) {
-                Text(if (balance.receivableItems.isEmpty()) "已全部结清" else "记录收款")
+                Text(if (detail.order.cancelled) "订单已作废" else if (balance.receivableItems.isEmpty()) "已全部结清" else "记录收款")
             }
         }
     }
@@ -1343,6 +1381,7 @@ private fun recurrenceText(task: OrderTask): String = when (task.recurrence) {
     com.daigan.record.data.model.RecurrenceType.WEEKLY -> "每周"
     com.daigan.record.data.model.RecurrenceType.SELECTED_WEEKDAYS ->
         "指定星期 " + task.weekdays.joinToString("、") { weekdayLabel(it) }
+    com.daigan.record.data.model.RecurrenceType.MONTHLY -> "每月 ${task.monthDay ?: "?"} 日（无该日跳过）"
     com.daigan.record.data.model.RecurrenceType.EVERY_N_DAYS ->
         "每隔 ${task.everyNDays ?: "?"} 天"
 }

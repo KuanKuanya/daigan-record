@@ -17,6 +17,13 @@ class ReminderRulesTest {
     )
     private fun messages(order: ReminderOrder, at: String) = ReminderEvaluator.messages(ReminderSnapshot(listOf(order)), Instant.parse(at))
 
+    @Test fun `monthly reminders use fixed date and completion key`() {
+        val monthly = order().copy(tasks = listOf(order().tasks.single().copy(recurrence = RecurrenceType.MONTHLY, monthDay = 18)))
+        val now = Instant.parse("2026-10-18T12:00:00Z")
+        assertEquals(setOf("task"), ReminderEvaluator.dueHostingTaskIds(monthly, now))
+        assertTrue(ReminderEvaluator.dueHostingTaskIds(monthly.copy(occurrences = listOf(ReminderOccurrence("task", "M:2026-10-18", true))), now).isEmpty())
+        assertTrue(ReminderEvaluator.dueHostingTaskIds(monthly.copy(tasks = listOf(monthly.tasks.single().copy(monthDay = 31))), now).isEmpty())
+    }
     @Test fun `deadline uses order refresh rather than device midnight`() {
         val short = order(OrderType.SHORT_TASK)
         assertFalse(messages(short, "2026-10-17T19:59:59Z").containsKey(ReminderCategory.SHORT_DEADLINE))

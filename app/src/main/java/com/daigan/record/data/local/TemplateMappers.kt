@@ -32,6 +32,7 @@ fun TemplateTaskEntity.toModel(): TemplateTask = TemplateTask(
     recurrence = recurrence,
     weekdays = parseWeekdays(weekdays),
     everyNDays = everyNDays,
+    monthDay = monthDay,
     sortOrder = sortOrder,
 )
 

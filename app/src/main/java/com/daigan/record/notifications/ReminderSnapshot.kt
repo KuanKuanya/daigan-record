@@ -25,6 +25,7 @@ data class ReminderTask(
     val weekdays: Set<DayOfWeek>,
     val everyNDays: Int?,
     val completed: Boolean,
+    val monthDay: Int? = null,
 )
 
 /** One occurrence of a hosting task (only the latest period is relevant). */
@@ -164,6 +165,7 @@ object ReminderEvaluator {
                 recurrence = task.recurrence,
                 weekdays = task.weekdays,
                 everyNDays = task.everyNDays,
+                monthDay = task.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 today = today,
@@ -211,7 +213,7 @@ object ReminderSnapshotBuilder {
                     title = order.title,
                     ownerLabel = "#${owner.number} ${owner.nickname}",
                     accountLabel = "${account.gameName}·${account.server}",
-                    archived = owner.archivedAt != null || account.archivedAt != null,
+                    archived = order.cancelledAt != null || owner.archivedAt != null || account.archivedAt != null,
                     completed = order.completedAt != null,
                     deadlineDate = order.deadlineDate,
                     refresh = GameRefreshRules.fromMinutes(
@@ -255,6 +257,7 @@ object ReminderSnapshotBuilder {
         recurrence = recurrence,
         weekdays = com.daigan.record.data.local.parseWeekdays(weekdays),
         everyNDays = everyNDays,
+    monthDay = monthDay,
         completed = completedAt != null,
     )
 }

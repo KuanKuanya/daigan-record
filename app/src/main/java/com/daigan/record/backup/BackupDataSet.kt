@@ -141,7 +141,13 @@ object BackupDataCodec {
             val columnsElement = tableObject["columns"] as? JsonArray
                 ?: throw BackupException("备份的数据表「$name」缺少列说明，无法恢复。")
             val columns = columnsElement.map { (it as? JsonPrimitive)?.content }
-            if (columns != spec.columnNames) {
+            val addedColumn = when (name) {
+                "orders" -> "cancelledAt"
+                "task_definitions", "template_tasks" -> "monthDay"
+                else -> null
+            }
+            val legacyColumns = addedColumn != null && columns == spec.columnNames.filter { it != addedColumn }
+            if (columns != spec.columnNames && !legacyColumns) {
                 throw BackupException("备份的数据表「$name」列不符合当前版本，无法恢复。")
             }
             val rowsElement = tableObject["rows"] as? JsonArray
@@ -152,11 +158,12 @@ object BackupDataCodec {
             val rows = rowsElement.map { rowElement ->
                 val rowArray = rowElement as? JsonArray
                     ?: throw BackupException("备份的数据表「$name」记录格式无效，无法恢复。")
-                if (rowArray.size != spec.columns.size) {
+                if (rowArray.size != columns.size) {
                     throw BackupException("备份的数据表「$name」记录列数不正确，无法恢复。")
                 }
-                val row = rowArray.mapIndexed { index, value ->
-                    decodeValue(spec.columns[index], value, spec.name)
+                val row = spec.columns.map { column ->
+                    val sourceIndex = columns.indexOf(column.name)
+                    if (sourceIndex < 0) null else decodeValue(column, rowArray[sourceIndex], spec.name)
                 }
                 if (spec.singleton && (row[spec.columnNames.indexOf("id")] as? JsonPrimitive)?.content != "0") {
                     throw BackupException("备份中的单例设置编号无效，无法恢复。")
@@ -203,7 +210,7 @@ object BackupDataCodec {
                 }
                 val intColumn = column.name in setOf("number", "nextNumber", "periodIndex",
                     "dailyRefreshMinutes", "weeklyRefreshDay", "weeklyRefreshMinutes", "sortOrder",
-                    "everyNDays", "shortDeadlineMinutes", "hostingExpiryMinutes", "unfinishedTasksMinutes")
+                    "everyNDays", "monthDay", "shortDeadlineMinutes", "hostingExpiryMinutes", "unfinishedTasksMinutes")
                 if (intColumn && raw.toIntOrNull() == null) {
                     throw BackupException("备份中的整数字段超出支持范围，无法恢复。")
                 }

@@ -117,7 +117,7 @@ object Balances {
                 periodEnd = null,
                 priceCents = price,
                 paidCents = paid,
-                outstandingCents = Money.remainingCents(price, paid),
+                outstandingCents = if (order.cancelled) 0L else Money.remainingCents(price, paid),
             )
             return OrderBalance(
                 orderId = order.id,
@@ -144,7 +144,7 @@ object Balances {
                 periodEnd = period.endDate,
                 priceCents = period.priceCents,
                 paidCents = paid,
-                outstandingCents = Money.remainingCents(period.priceCents, paid),
+                outstandingCents = if (order.cancelled) 0L else Money.remainingCents(period.priceCents, paid),
             )
         }
         return OrderBalance(

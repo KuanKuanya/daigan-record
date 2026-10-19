@@ -166,6 +166,7 @@ internal fun OwnerDetailContent(
     onOpenOrder: (String) -> Unit = {},
 ) {
     var showArchiveOwnerDialog by rememberSaveable { mutableStateOf(false) }
+    var archivedAccountsExpanded by rememberSaveable(detail.owner.id) { mutableStateOf(false) }
     val archived = detail.owner.archived
 
     if (showArchiveOwnerDialog) {
@@ -294,23 +295,43 @@ internal fun OwnerDetailContent(
             if (detail.archivedAccounts.isNotEmpty()) {
                 item {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        text = "已归档账号 · ${detail.archivedAccounts.size} 个",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { archivedAccountsExpanded = !archivedAccountsExpanded }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "已归档账号 · ${detail.archivedAccounts.size} 个",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            imageVector = if (archivedAccountsExpanded) {
+                                Icons.Filled.ExpandLess
+                            } else {
+                                Icons.Filled.ExpandMore
+                            },
+                            contentDescription = if (archivedAccountsExpanded) "收起已归档账号" else "展开已归档账号",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                items(detail.archivedAccounts, key = { "archived-${it.id}" }) { account ->
-                    AccountCard(
-                        account = account,
-                        ownerArchived = archived,
-                        orders = ordersByAccount[account.id].orEmpty(),
-                        onEdit = {},
-                        onArchive = {},
-                        onRestore = { onRestoreAccount(account.id) },
-                        onCopy = onCopy,
-                        onCreateOrder = {},
-                        onOpenOrder = onOpenOrder,
-                    )
+                if (archivedAccountsExpanded) {
+                    items(detail.archivedAccounts, key = { "archived-${it.id}" }) { account ->
+                        AccountCard(
+                            account = account,
+                            ownerArchived = archived,
+                            orders = ordersByAccount[account.id].orEmpty(),
+                            onEdit = {},
+                            onArchive = {},
+                            onRestore = { onRestoreAccount(account.id) },
+                            onCopy = onCopy,
+                            onCreateOrder = {},
+                            onOpenOrder = onOpenOrder,
+                        )
+                    }
                 }
             }
         }
@@ -556,6 +577,7 @@ private fun AccountOrderRow(summary: OrderSummary, onClick: () -> Unit) {
         }
         StatusTag(
             text = when {
+                summary.order.cancelled -> "已作废"
                 !summary.order.isHosting && summary.order.completed -> "已完成"
                 !summary.order.isHosting -> "进行中"
                 else -> "托管"

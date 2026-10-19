@@ -27,7 +27,7 @@ enum class ProgressType { CHECKBOX, NUMERIC }
  * `DAILY`. Short orders never generate occurrences for any recurrence, so the value is
  * an explicit "one-off" marker there rather than an inferred default.
  */
-enum class RecurrenceType { ONE_TIME, DAILY, WEEKLY, SELECTED_WEEKDAYS, EVERY_N_DAYS }
+enum class RecurrenceType { ONE_TIME, DAILY, WEEKLY, SELECTED_WEEKDAYS, EVERY_N_DAYS, MONTHLY }
 
 enum class BatchScope { HOSTING_ORDER, HOSTING_ALL, SHORT_ORDER }
 
@@ -50,7 +50,9 @@ data class Order(
     val sourceTemplateId: String? = null,
     val sourceTemplateName: String? = null,
     val sourceTemplateVersion: String? = null,
+    val cancelledAt: Instant? = null,
 ) {
+    val cancelled: Boolean get() = cancelledAt != null
     val completed: Boolean get() = completedAt != null
     val isHosting: Boolean get() = type == OrderType.HOSTING
     val isShort: Boolean get() = type == OrderType.SHORT_TASK
@@ -99,6 +101,7 @@ data class OrderTask(
     val everyNDays: Int?,
     val sortOrder: Int,
     val completedAt: Instant?,
+    val monthDay: Int? = null,
 ) {
     val completed: Boolean get() = completedAt != null
 
@@ -271,12 +274,14 @@ data class OrderDetail(
         attachments.filter { it.occurrenceId == occurrenceId }
 
     fun currentStatus(): com.daigan.record.core.time.HostingStatus? {
+        if (order.cancelled) return null
         val period = currentPeriod ?: return null
         return com.daigan.record.core.time.GameCalendar.hostingStatus(today, period.startDate, period.endDate)
     }
 
     /** Current actionable hosting tasks, resolved with the same rules as today's page. */
     fun currentHostingTasks(): List<TodayHostingTask> {
+        if (order.cancelled) return emptyList()
         val period = currentPeriod ?: return emptyList()
         if (currentStatus() != com.daigan.record.core.time.HostingStatus.ACTIVE) return emptyList()
         val rules = period.refresh.toCoreForRules()
@@ -286,6 +291,7 @@ data class OrderDetail(
                 recurrence = task.recurrence,
                 weekdays = task.weekdays,
                 everyNDays = task.everyNDays,
+                monthDay = task.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 today = today,

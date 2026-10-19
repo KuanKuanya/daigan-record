@@ -21,6 +21,7 @@ fun progressLabel(type: ProgressType): String = when (type) {
 
 fun templateRecurrenceLabel(type: RecurrenceType): String = when (type) {
     RecurrenceType.ONE_TIME -> "一次性（短期单）"
+    RecurrenceType.MONTHLY -> "每月固定日号"
     RecurrenceType.DAILY -> "每日"
     RecurrenceType.WEEKLY -> "每周"
     RecurrenceType.SELECTED_WEEKDAYS -> "指定星期"

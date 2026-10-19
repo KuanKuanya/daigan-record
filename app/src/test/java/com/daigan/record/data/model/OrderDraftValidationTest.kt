@@ -7,6 +7,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OrderDraftValidationTest {
+    @org.junit.Test
+    fun monthlyOrderRequiresAnIntegerFromOneThroughThirtyOne() {
+        fun draft(day: String) = HostingOrderDraft(
+            ownerId = "owner", accountId = "account", startDate = java.time.LocalDate.of(2026, 10, 1),
+            endDate = java.time.LocalDate.of(2026, 10, 31), priceYuan = "100",
+            tasks = listOf(TaskDraft(title = "月常", recurrence = RecurrenceType.MONTHLY, monthDay = day)),
+        )
+        for (day in listOf("", "0", "32", "1.5")) org.junit.Assert.assertTrue(draft(day).validate().containsKey("task.0.monthDay"))
+        for (day in listOf("1", "29", "30", "31")) org.junit.Assert.assertTrue(draft(day).validate().isEmpty())
+    }
+
 
     private val today = LocalDate.of(2026, 10, 17)
 

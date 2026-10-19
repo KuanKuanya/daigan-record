@@ -13,6 +13,16 @@ import org.junit.Test
 
 class TemplateDraftTest {
 
+    @Test
+    fun `monthly templates validate fixed day and clear stale day after recurrence changes`() {
+        fun monthly(day: String) = draft(categories = listOf(TemplateCategoryDraft(
+            name = "每月", tasks = listOf(TemplateTaskDraft(title = "月常", recurrence = RecurrenceType.MONTHLY, monthDay = day)),
+        )))
+        for (day in listOf("", "0", "32", "1.5")) assertTrue(monthly(day).validate().containsKey("category.0.task.0.monthDay"))
+        for (day in listOf("1", "29", "30", "31")) assertTrue(monthly(day).validate().isEmpty())
+        assertEquals("", TemplateTaskDraft(monthDay = "31").normalized().monthDay)
+    }
+
     private fun draft(
         categories: List<TemplateCategoryDraft> = listOf(
             TemplateCategoryDraft(

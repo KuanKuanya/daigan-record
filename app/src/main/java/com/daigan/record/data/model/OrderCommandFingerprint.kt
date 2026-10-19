@@ -87,6 +87,7 @@ object OrderCommandFingerprint {
                 "task.$index.weekdays",
                 task.weekdays.sortedBy { it.value }.joinToString(",") { it.name },
             )
+            if (task.recurrence == RecurrenceType.MONTHLY) token("task.$index.monthDay", task.monthDayOrNull())
             token(
                 "task.$index.everyN",
                 if (task.recurrence == RecurrenceType.EVERY_N_DAYS) {

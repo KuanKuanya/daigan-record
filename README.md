@@ -5,13 +5,13 @@
 <h1 align="center">代肝记录</h1>
 
 <p align="center">把老板、订单、每日打卡和收款，放进同一本小账本。</p>
-<p align="center"><strong>v1.5 Beta · Android 8.0+ · 离线使用 · 中文界面</strong></p>
+<p align="center"><strong>v1.6 Beta · Android 8.0+ · 离线使用 · 中文界面</strong></p>
 
 接的单多了，最容易混在一起的往往是这些事：今天该上哪个号、这单做到哪一天、老板付了多少、还有哪笔钱没收齐。
 
 **代肝记录**是一款为个人游戏代肝接单者制作的 Android 记录工具。把老板和账号建好，再把托管、短期任务和收款记进去，就可以从「今日事项」「账号信息」「数据统计」三个入口查看。
 
-游戏操作由使用者自行完成，应用负责记录任务、服务进度和账目。目前已开放 v1.5 Beta 下载测试。
+游戏操作由使用者自行完成，应用负责记录任务、服务进度和账目。v1.6 修复了订单纠错、误建订单清理和归档展示问题，并新增每月固定日期任务。安装包见 Releases。
 
 ## 先看看实际界面
 
@@ -45,12 +45,18 @@
   </tr>
 </table>
 
+## v1.6 更新
+
+订单详情支持修改服务日期，以及删除无业务记录的误建订单或作废已有记录的订单；已归档账号默认折叠。任务和模板支持每月固定 1–31 号更新，当月没有该日则跳过。已有打卡、截图及收款受到保留规则保护。
+
+安装包可从下方 Releases 下载，问题及验证见 [v1.6 修复记录](docs/handoffs/v1.6-user-feedback.md)。
+
 ## 下载与安装
 
 - 系统要求：Android 8.0 / API 26 及以上。目前提供 Android 版本。
 - 下载位置：本仓库的 **[Releases](https://github.com/undefinedfrancis/daigan-record/releases)** 页面，选择最新 Beta，在 **Assets** 中下载 `.apk` 文件；`Source code` 是源码压缩包。
-- 当前版本：**[v1.5 Beta 1](https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.5-beta.1)**，已开放下载。
-- **[直接下载 Android 安装包（APK）](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.5-beta.1/daigan-record-v1.5-debug.apk)** · [SHA-256 校验文件](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.5-beta.1/SHA256SUMS)
+- 当前公开下载版本：**[v1.6 Beta 1](https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.6-beta.1)**。
+- **[直接下载 Android 安装包（APK）](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.6-beta.1/daigan-record-v1.6-debug.apk)** · [SHA-256 校验文件](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.6-beta.1/SHA256SUMS)
 - 安装：在手机上打开 APK，按系统提示允许该下载来源安装应用。升级前先在应用内备份资料，尽量使用同一发布渠道的安装包覆盖升级。
 
 当前安装包使用调试签名。后续若调整分发签名，会在 Release 说明中告知安装和迁移方式。

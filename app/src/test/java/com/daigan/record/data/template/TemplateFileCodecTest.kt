@@ -82,6 +82,16 @@ class TemplateFileCodecTest {
         ),
     )
 
+    @Test
+    fun monthlyTemplateFilePreservesDay() {
+        val category = template.categories.first()
+        val monthly = template.copy(categories = listOf(category.copy(tasks = listOf(category.tasks.first().copy(recurrence = RecurrenceType.MONTHLY, monthDay = 31)))))
+        val decoded = TemplateFileCodec.decode(TemplateFileCodec.encode(monthly)) as TemplateFileResult.Success
+        assertEquals("31", decoded.content.draft.categories.single().tasks.single().monthDay)
+        val invalid = monthly.copy(categories = listOf(category.copy(tasks = listOf(category.tasks.first().copy(recurrence = RecurrenceType.MONTHLY, monthDay = 32)))))
+        assertTrue(TemplateFileCodec.decode(TemplateFileCodec.encode(invalid)) is TemplateFileResult.Failure)
+    }
+
     private fun encoded(): String = String(TemplateFileCodec.encode(template), Charsets.UTF_8)
 
     private fun mutateJson(transform: (JsonObject) -> JsonObject): ByteArray {

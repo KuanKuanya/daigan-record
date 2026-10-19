@@ -416,6 +416,7 @@ class DefaultGameTemplateRepository @Inject constructor(
                     unit = task.unit.ifBlank { null },
                     recurrence = task.recurrence,
                     weekdays = encodeWeekdays(task.weekdays),
+                    monthDay = if (task.recurrence == com.daigan.record.data.model.RecurrenceType.MONTHLY) task.monthDayOrNull() else null,
                     everyNDays = if (task.recurrence == com.daigan.record.data.model.RecurrenceType.EVERY_N_DAYS) {
                         task.everyNOrNull()
                     } else {

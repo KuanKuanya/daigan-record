@@ -1,6 +1,6 @@
 # Beta 发布准备
 
-当前应用版本为 **1.5 / versionCode 6**。源码与图文介绍已推送到公开仓库，首次 beta 已发布；应用内部版本保持 1.5 / versionCode 6。
+当前应用版本为 **1.6 / versionCode 7**，发布标签为 `v1.6-beta.1`。修复范围及本地验证见 [v1.6 交接](handoffs/v1.6-user-feedback.md)。
 
 ## 提交范围
 
@@ -11,9 +11,10 @@
 ## 版本和安装包
 
 - 功能或修复交付递增 `versionName`，同时递增整数 `versionCode`，文件名对应内部版本。
-- 当前安装包：`artifacts/v1.5/daigan-record-v1.5-debug.apk`。
+- 当前安装包：`output/releases/v1.6/daigan-record-v1.6-debug.apk`；仅作为 Release 附件上传，不纳入 Git 历史。
+- 当前预发布标签：`v1.6-beta.1`，绑定本次 v1.6 发布提交。
 - 首次预发布标签：`v1.5-beta.1`，对应应用源码提交 `60fccdc54c1bba59a29de2bd561816311d9f9ff6`。
-- 下载：https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.5-beta.1
+- 下载：https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.6-beta.1
 - APK 作为 Release 附件上传，并附 SHA-256。代码标签应对应实际构建源码。
 - 当前包为 debug 签名；不同电脑或 CI 的 debug 密钥可能不同。准备长期覆盖安装分发时，需要固定签名身份，并在仓库外保存密钥。
 

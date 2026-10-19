@@ -97,9 +97,10 @@
 | `startValue` | string/number | 是 | 数值；≤ 3 位小数；不得为负；不超过 10^12 |
 | `targetValue` | string/number | 是 | 数值；≤ 3 位小数；必须大于起始值 |
 | `unit` | string \| null | 否 | ≤ 10 字符；`CHECKBOX` 时忽略 |
-| `recurrence` | string | 是 | `ONE_TIME` / `DAILY` / `WEEKLY` / `SELECTED_WEEKDAYS` / `EVERY_N_DAYS` |
+| `recurrence` | string | 是 | `ONE_TIME` / `DAILY` / `WEEKLY` / `SELECTED_WEEKDAYS` / `EVERY_N_DAYS` / `MONTHLY` |
 | `weekdays` | array | 否 | `MONDAY` … `SUNDAY`；`SELECTED_WEEKDAYS` 时至少 1 个 |
 | `everyNDays` | integer \| null | 否 | 1–365；仅 `EVERY_N_DAYS` 使用 |
+| `monthDay` | integer \| null | MONTHLY 时必填 | 1–31；仅 `MONTHLY` 使用，当月不存在该日时跳过 |
 
 `CHECKBOX` 任务的起始/目标值在保存时规范化为 `0`/`1`；文件中仍必须提供有效的数值字段。
 
@@ -166,3 +167,5 @@
 - 严格拒绝未知字段，避免把其他应用的业务数据文件误当作模板合并。
 - 应用不申请 `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` 或 `MANAGE_EXTERNAL_STORAGE`；
   只使用系统文档选择器返回的 URI。
+
+自 v1.6 起支持 `MONTHLY` 与 `monthDay`。旧模板缺少 `monthDay` 仍可导入；包含每月任务的模板需使用 v1.6 或更新版本。按月任务根据订单的游戏时区和每日刷新时间生成，不会在服务期限外生成。

@@ -110,6 +110,7 @@ data class TemplateTaskEntity(
     val weekdays: String?,
     val everyNDays: Int?,
     val sortOrder: Int,
+    val monthDay: Int? = null,
 )
 
 /**

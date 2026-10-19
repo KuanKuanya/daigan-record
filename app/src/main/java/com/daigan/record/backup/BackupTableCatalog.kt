@@ -118,6 +118,7 @@ object BackupTableCatalog {
                 text("weekdays"),
                 integer("everyNDays"),
                 integer("sortOrder"),
+                integer("monthDay"),
             ),
         ),
         Table(
@@ -157,6 +158,7 @@ object BackupTableCatalog {
                 text("sourceTemplateId"),
                 text("sourceTemplateName"),
                 text("sourceTemplateVersion"),
+                integer("cancelledAt"),
             ),
         ),
         Table(
@@ -196,6 +198,7 @@ object BackupTableCatalog {
                 text("completionBatchId"),
                 integer("createdAt"),
                 integer("updatedAt"),
+                integer("monthDay"),
             ),
         ),
         Table(

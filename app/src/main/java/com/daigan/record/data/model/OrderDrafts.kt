@@ -19,10 +19,12 @@ data class TaskDraft(
     val recurrence: RecurrenceType = RecurrenceType.DAILY,
     val weekdays: Set<DayOfWeek> = emptySet(),
     val everyNDays: String = "",
+    val monthDay: String = "",
 ) {
     fun startDecimal(): BigDecimal? = parseDecimal(startValue)
     fun targetDecimal(): BigDecimal? = parseDecimal(targetValue)
     fun everyNOrNull(): Int? = everyNDays.trim().toIntOrNull()
+    fun monthDayOrNull(): Int? = monthDay.trim().toIntOrNull()
 
     companion object {
         fun parseDecimal(raw: String): BigDecimal? =
@@ -193,6 +195,9 @@ private fun TaskDraft.validate(index: Int, errors: MutableMap<String, String>) {
         }
     }
     when (recurrence) {
+        RecurrenceType.MONTHLY -> if (monthDayOrNull() !in 1..31) {
+            errors["$prefix.monthDay"] = "每月日号需为 1–31 的整数"
+        }
         RecurrenceType.ONE_TIME, RecurrenceType.DAILY, RecurrenceType.WEEKLY -> Unit
         RecurrenceType.SELECTED_WEEKDAYS -> if (weekdays.isEmpty()) {
             errors["$prefix.weekdays"] = "请为指定星期任务选择执行日"

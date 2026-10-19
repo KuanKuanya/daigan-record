@@ -17,6 +17,7 @@ import java.time.temporal.ChronoUnit
  * - `D:<gameDate>`   daily task on that game day
  * - `S:<gameDate>`   weekday-selected task on that game day
  * - `E:<gameDate>`   every-N-days task on that game day
+ * - `M:<gameDate>`   monthly task on its fixed day (missing calendar days are skipped)
  * - `W:<windowStartLocalDate>` weekly task for that whole configured window
  *
  * Weekly work is never copied to each day of the week. One window produces one row.
@@ -34,11 +35,13 @@ object OccurrenceRules {
         everyNDays: Int?,
         periodStart: LocalDate,
         date: LocalDate,
+        monthDay: Int? = null,
     ): Boolean {
         if (date.isBefore(periodStart)) return false
         return when (recurrence) {
             // One-time work is not recurrence: it never owns a game-day slot.
             RecurrenceType.ONE_TIME -> false
+            RecurrenceType.MONTHLY -> monthDay in 1..31 && date.dayOfMonth == monthDay
             RecurrenceType.DAILY, RecurrenceType.WEEKLY -> true
             RecurrenceType.SELECTED_WEEKDAYS -> date.dayOfWeek in weekdays
             RecurrenceType.EVERY_N_DAYS -> {
@@ -64,6 +67,7 @@ object OccurrenceRules {
         today: LocalDate,
         rules: GameRefreshRules,
         now: Instant,
+        monthDay: Int? = null,
     ): OccurrenceSlot? {
         if (!GameCalendar.isWithinPeriod(today, periodStart, periodEnd)) return null
         if (recurrence == RecurrenceType.WEEKLY) {
@@ -74,7 +78,7 @@ object OccurrenceRules {
                 rules = rules,
             )
         }
-        if (!appliesOn(recurrence, weekdays, everyNDays, periodStart, today)) return null
+        if (!appliesOn(recurrence, weekdays, everyNDays, periodStart, today, monthDay)) return null
         return dailySlot(recurrence, today)
     }
 
@@ -92,6 +96,7 @@ object OccurrenceRules {
         periodEnd: LocalDate,
         date: LocalDate,
         rules: GameRefreshRules,
+        monthDay: Int? = null,
     ): OccurrenceSlot? {
         if (!GameCalendar.isWithinPeriod(date, periodStart, periodEnd)) return null
         if (recurrence == RecurrenceType.WEEKLY) {
@@ -102,7 +107,7 @@ object OccurrenceRules {
                 rules = rules,
             )
         }
-        if (!appliesOn(recurrence, weekdays, everyNDays, periodStart, date)) return null
+        if (!appliesOn(recurrence, weekdays, everyNDays, periodStart, date, monthDay)) return null
         return dailySlot(recurrence, date)
     }
 
@@ -119,6 +124,7 @@ object OccurrenceRules {
         periodEnd: LocalDate,
         date: LocalDate,
         rules: GameRefreshRules,
+        monthDay: Int? = null,
     ): List<OccurrenceSlot> {
         if (!GameCalendar.isWithinPeriod(date, periodStart, periodEnd)) return emptyList()
         if (recurrence == RecurrenceType.WEEKLY) {
@@ -126,7 +132,7 @@ object OccurrenceRules {
                 weeklySlot(window, periodStart, periodEnd, rules)
             }
         }
-        if (!appliesOn(recurrence, weekdays, everyNDays, periodStart, date)) return emptyList()
+        if (!appliesOn(recurrence, weekdays, everyNDays, periodStart, date, monthDay)) return emptyList()
         return listOf(dailySlot(recurrence, date))
     }
 
@@ -153,6 +159,7 @@ object OccurrenceRules {
 
     private fun dailySlot(recurrence: RecurrenceType, date: LocalDate): OccurrenceSlot {
         val prefix = when (recurrence) {
+            RecurrenceType.MONTHLY -> "M"
             RecurrenceType.DAILY -> "D"
             RecurrenceType.SELECTED_WEEKDAYS -> "S"
             RecurrenceType.EVERY_N_DAYS -> "E"

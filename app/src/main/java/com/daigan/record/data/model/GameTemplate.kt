@@ -44,6 +44,7 @@ data class TemplateTask(
     val weekdays: Set<DayOfWeek>,
     val everyNDays: Int?,
     val sortOrder: Int,
+    val monthDay: Int? = null,
 ) {
     val oneTime: Boolean get() = recurrence == RecurrenceType.ONE_TIME
 }
@@ -212,6 +213,7 @@ data class TemplateDraft(
                             recurrence = task.recurrence,
                             weekdays = task.weekdays,
                             everyNDays = task.everyNDays?.toString().orEmpty(),
+                            monthDay = task.monthDay?.toString().orEmpty(),
                         )
                     },
                 )
@@ -242,16 +244,19 @@ data class TemplateTaskDraft(
     val recurrence: RecurrenceType = RecurrenceType.DAILY,
     val weekdays: Set<DayOfWeek> = emptySet(),
     val everyNDays: String = "",
+    val monthDay: String = "",
 ) {
     fun startDecimal(): BigDecimal? = parseDecimal(startValue)
     fun targetDecimal(): BigDecimal? = parseDecimal(targetValue)
     fun everyNOrNull(): Int? = everyNDays.trim().toIntOrNull()
+    fun monthDayOrNull(): Int? = monthDay.trim().toIntOrNull()
 
     fun normalized(): TemplateTaskDraft = copy(
         title = title.trim(),
         unit = if (progressType == ProgressType.NUMERIC) unit.trim() else "",
         startValue = if (progressType == ProgressType.NUMERIC) startValue.trim() else "0",
         targetValue = if (progressType == ProgressType.NUMERIC) targetValue.trim() else "1",
+        monthDay = if (recurrence == RecurrenceType.MONTHLY) monthDay.trim() else "",
         everyNDays = if (recurrence == RecurrenceType.EVERY_N_DAYS) everyNDays.trim() else "",
         weekdays = if (recurrence == RecurrenceType.SELECTED_WEEKDAYS) weekdays else emptySet(),
     )
@@ -285,6 +290,9 @@ data class TemplateTaskDraft(
             }
         }
         when (task.recurrence) {
+            RecurrenceType.MONTHLY -> if (task.monthDayOrNull() !in 1..31) {
+                errors["$key.monthDay"] = "每月日号需为 1–31 的整数"
+            }
             RecurrenceType.SELECTED_WEEKDAYS -> if (task.weekdays.isEmpty()) {
                 errors["$key.weekdays"] = "请为指定星期任务选择执行日"
             }
@@ -328,6 +336,7 @@ fun TemplateTask.toTaskDraft(): TaskDraft = TaskDraft(
     recurrence = recurrence,
     weekdays = weekdays,
     everyNDays = everyNDays?.toString().orEmpty(),
+    monthDay = monthDay?.toString().orEmpty(),
 )
 
 fun GameTemplate.provenance(): OrderTemplateProvenance = OrderTemplateProvenance(

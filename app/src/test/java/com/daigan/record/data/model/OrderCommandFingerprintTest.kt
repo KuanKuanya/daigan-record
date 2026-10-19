@@ -40,6 +40,15 @@ class OrderCommandFingerprintTest {
     )
 
     @Test
+    fun monthlyDayChangesCommandButIrrelevantDayDoesNotChangeLegacyCommand() {
+        fun fingerprint(task: TaskDraft) = OrderCommandFingerprint.short(short().copy(tasks = listOf(task)))
+        val task = TaskDraft(title = "月常", recurrence = RecurrenceType.MONTHLY, monthDay = "1")
+        assertNotEquals(fingerprint(task), fingerprint(task.copy(monthDay = "31")))
+        assertEquals(fingerprint(task.copy(monthDay = " 1 ")), fingerprint(task))
+        assertEquals(fingerprint(task.copy(recurrence = RecurrenceType.DAILY)), fingerprint(task.copy(recurrence = RecurrenceType.DAILY, monthDay = "31")))
+    }
+
+    @Test
     fun whitespaceAndDecimalFormattingDoNotChangeTheCommand() {
         val a = short()
         val b = short(title = "日常", taskTitle = "主线", start = "0.00")

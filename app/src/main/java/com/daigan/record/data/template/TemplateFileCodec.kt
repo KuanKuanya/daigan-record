@@ -97,6 +97,7 @@ object TemplateFileCodec {
         "recurrence",
         "weekdays",
         "everyNDays",
+        "monthDay",
     )
     private val rootKeys = setOf("format", "formatVersion", "template")
 
@@ -138,6 +139,7 @@ object TemplateFileCodec {
                                                             .forEach { add(JsonPrimitive(it.name)) }
                                                     },
                                                 )
+                                                put("monthDay", task.monthDay?.let(::JsonPrimitive) ?: JsonNull)
                                                 put(
                                                     "everyNDays",
                                                     task.everyNDays?.let(::JsonPrimitive) ?: JsonNull,
@@ -253,6 +255,7 @@ object TemplateFileCodec {
                     recurrence = parseRecurrence(task.requireString("recurrence")),
                     weekdays = parseWeekdays(task),
                     everyNDays = task.optionalInt("everyNDays")?.toString().orEmpty(),
+                    monthDay = task.optionalInt("monthDay")?.toString().orEmpty(),
                 )
             }
             TemplateCategoryDraft(id = categoryId, name = name, tasks = tasks)
@@ -291,6 +294,7 @@ object TemplateFileCodec {
         RecurrenceType.DAILY.name -> RecurrenceType.DAILY
         RecurrenceType.WEEKLY.name -> RecurrenceType.WEEKLY
         RecurrenceType.SELECTED_WEEKDAYS.name -> RecurrenceType.SELECTED_WEEKDAYS
+        RecurrenceType.MONTHLY.name -> RecurrenceType.MONTHLY
         RecurrenceType.EVERY_N_DAYS.name -> RecurrenceType.EVERY_N_DAYS
         else -> throw TemplateFileException("不支持的任务重复周期：$raw")
     }

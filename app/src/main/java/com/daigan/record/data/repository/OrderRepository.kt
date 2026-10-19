@@ -112,6 +112,12 @@ data class DisplayedHostingSnapshot(
 )
 
 interface OrderRepository {
+    suspend fun updateOrderDates(orderId: String, periodId: String?, startDate: LocalDate?, endDate: LocalDate?) {
+        error("不支持修改日期")
+    }
+    suspend fun deleteUnusedOrder(orderId: String) { error("不支持删除订单") }
+    suspend fun cancelOrder(orderId: String) { error("不支持作废订单") }
+
 
     fun observeOrdersForOwner(ownerId: String): Flow<List<OrderSummary>>
 
@@ -470,6 +476,7 @@ class DefaultOrderRepository @Inject constructor(
                     recurrence = model.recurrence,
                     weekdays = model.weekdays,
                     everyNDays = model.everyNDays,
+                    monthDay = model.monthDay,
                     periodStart = period.startDate,
                     periodEnd = period.endDate,
                     today = today,
@@ -771,6 +778,7 @@ class DefaultOrderRepository @Inject constructor(
         database.withDatasetTransaction {
             val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
             val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.SHORT_TASK) { "只有短期任务可以单独勾选" }
             requireWritableAccount(order.accountId, null)
             val model = task.toModel()
@@ -798,6 +806,7 @@ class DefaultOrderRepository @Inject constructor(
             val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
             require(task.progressType == ProgressType.NUMERIC) { "该任务不使用数值进度" }
             val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.SHORT_TASK) { "只有短期任务可以编辑进度" }
             requireWritableAccount(order.accountId, null)
             val reached = value >= task.targetValue
@@ -832,6 +841,7 @@ class DefaultOrderRepository @Inject constructor(
                 )
             }
             val order = orderDao.findById(orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.SHORT_TASK) { "只有短期订单可以整单完成" }
             requireWritableAccount(order.accountId, null)
             val tasks = taskDao.findForOrder(orderId)
@@ -902,6 +912,7 @@ class DefaultOrderRepository @Inject constructor(
             val period = task.periodId?.let { orderDao.findPeriod(it) }
                 ?: throw IllegalArgumentException("托管期次不存在")
             val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.HOSTING) { "只有托管任务使用打卡记录" }
             requireWritableAccount(order.accountId, null)
             val rules = refreshOf(period)
@@ -911,6 +922,7 @@ class DefaultOrderRepository @Inject constructor(
                 recurrence = model.recurrence,
                 weekdays = model.weekdays,
                 everyNDays = model.everyNDays,
+                monthDay = model.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 today = today,
@@ -959,6 +971,7 @@ class DefaultOrderRepository @Inject constructor(
             val period = task.periodId?.let { orderDao.findPeriod(it) }
                 ?: throw IllegalArgumentException("托管期次不存在")
             val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             requireWritableAccount(order.accountId, null)
             val rules = refreshOf(period)
             val today = GameCalendar.gameDate(now, rules)
@@ -967,6 +980,7 @@ class DefaultOrderRepository @Inject constructor(
                 recurrence = model.recurrence,
                 weekdays = model.weekdays,
                 everyNDays = model.everyNDays,
+                monthDay = model.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 today = today,
@@ -1007,6 +1021,7 @@ class DefaultOrderRepository @Inject constructor(
                 )
             }
             val order = orderDao.findById(orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.HOSTING) { "只有托管订单可以整单完成" }
             requireWritableAccount(order.accountId, null)
             val period = orderDao.findPeriods(orderId).maxByOrNull { it.periodIndex }
@@ -1161,6 +1176,7 @@ class DefaultOrderRepository @Inject constructor(
         val now = ticker.now()
         return database.withDatasetTransaction {
             val order = orderDao.findById(orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.HOSTING) { "只有托管订单可以补录" }
             requireWritableAccount(order.accountId, null)
             val period = orderDao.findPeriod(periodId)
@@ -1190,6 +1206,7 @@ class DefaultOrderRepository @Inject constructor(
                     recurrence = model.recurrence,
                     weekdays = model.weekdays,
                     everyNDays = model.everyNDays,
+                    monthDay = model.monthDay,
                     periodStart = period.startDate,
                     periodEnd = period.endDate,
                     date = date,
@@ -1253,6 +1270,7 @@ class DefaultOrderRepository @Inject constructor(
                 )
             }
             val order = orderDao.findById(orderId) ?: throw IllegalArgumentException("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
             require(order.type == OrderType.HOSTING) { "只有托管订单可以续期" }
             requireWritableAccount(order.accountId, null)
             val current = orderDao.findPeriods(orderId).maxByOrNull { it.periodIndex }
@@ -1314,6 +1332,78 @@ class DefaultOrderRepository @Inject constructor(
         }
     }
 
+    override suspend fun updateOrderDates(
+        orderId: String, periodId: String?, startDate: LocalDate?, endDate: LocalDate?,
+    ) {
+        database.withDatasetTransaction {
+            val order = orderDao.findById(orderId) ?: error("订单不存在")
+            require(order.cancelledAt == null) { "该订单已作废" }
+            requireWritableAccount(order.accountId, null)
+            val now = ticker.now()
+            if (order.type == OrderType.SHORT_TASK) {
+                require(periodId == null && startDate == null) { "短期单只需修改截止日期" }
+                orderDao.updateDeadline(orderId, endDate, now)
+            } else {
+                val periods = orderDao.findPeriods(orderId)
+                val period = periods.firstOrNull { it.id == periodId } ?: error("托管期次不存在")
+                val start = requireNotNull(startDate) { "请选择开始日期" }
+                val end = requireNotNull(endDate) { "请选择结束日期" }
+                require(!end.isBefore(start)) { "结束日期不能早于开始日期" }
+                require(java.time.temporal.ChronoUnit.DAYS.between(start, end) < HostingOrderDraft.MAX_DURATION_DAYS) {
+                    "托管天数最多 ${HostingOrderDraft.MAX_DURATION_DAYS} 天"
+                }
+                require(periods.filter { it.id != period.id }.none {
+                    !end.isBefore(it.startDate) && !start.isAfter(it.endDate)
+                }) { "修改后的日期不能与其他期次重叠" }
+                require(periods.filter { it.periodIndex < period.periodIndex }.all { it.endDate.isBefore(start) } &&
+                    periods.filter { it.periodIndex > period.periodIndex }.all { it.startDate.isAfter(end) }) {
+                    "修改后的日期必须保持期次先后顺序"
+                }
+                val tasks = taskDao.findForOrder(orderId).filter { it.periodId == period.id }
+                val taskIds = tasks.map { it.id }.toSet()
+                val occurrences = occurrenceDao.findForOrder(orderId).filter { it.taskDefinitionId in taskIds }
+                // Even undone/partial occurrences are history. Never orphan their dates,
+                // shift every-N anchors, or rewrite persisted weekly window metadata.
+                require(occurrences.isEmpty() || start == period.startDate) {
+                    "本期已有打卡或进度记录，不能修改开始日期；可修改结束日期"
+                }
+                require(occurrences.all { !it.gameDate.isBefore(start) && !it.gameDate.isAfter(end) &&
+                    (it.windowEnd == null || !it.windowEnd.isAfter(end)) }) {
+                    "修改后的日期会排除已有打卡或进度记录，请保留这些服务日期"
+                }
+                orderDao.updatePeriodDates(period.id, start, end)
+                orderDao.touch(orderId, now)
+            }
+        }
+    }
+
+    override suspend fun deleteUnusedOrder(orderId: String) {
+        database.withDatasetTransaction {
+            val order = orderDao.findById(orderId) ?: return@withDatasetTransaction
+            val tasks = taskDao.findForOrder(orderId)
+            require(receiptDao.findForOrder(orderId).isEmpty() &&
+                attachmentDao.findForOrder(orderId).isEmpty() &&
+                occurrenceDao.findForOrder(orderId).isEmpty() &&
+                orderDao.countBatchReferences(orderId) == 0 &&
+                tasks.all { it.completedAt == null && it.currentValue.compareTo(it.startValue) == 0 } &&
+                orderDao.findPeriods(orderId).size <= 1) {
+                "订单已有业务记录，请使用作废订单以保留历史"
+            }
+            require(order.cancelledAt == null) { "已作废订单保留历史，不能删除" }
+            orderDao.deleteCreationIdentity(orderId)
+            orderDao.deleteTasks(orderId)
+            orderDao.deletePeriods(orderId)
+            orderDao.deleteOrder(orderId)
+        }
+    }
+
+    override suspend fun cancelOrder(orderId: String) {
+        database.withDatasetTransaction {
+            val order = orderDao.findById(orderId) ?: error("订单不存在")
+            if (order.cancelledAt == null) orderDao.cancel(orderId, ticker.now())
+        }
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private suspend fun requireWritableAccount(accountId: String, expectedOwnerId: String?): AccountOwner {
@@ -1336,6 +1426,7 @@ class DefaultOrderRepository @Inject constructor(
     private suspend fun assertTaskWritable(taskId: String) {
         val task = taskDao.findById(taskId) ?: return
         val order = orderDao.findById(task.orderId) ?: return
+        require(order.cancelledAt == null) { "该订单已作废，不能再修改工作记录" }
         val account = accountDao.findById(order.accountId) ?: return
         val owner = ownerDao.findById(account.ownerId) ?: return
         require(owner.archivedAt == null) { ARCHIVED_OWNER_WORK_MESSAGE }
@@ -1369,6 +1460,7 @@ class DefaultOrderRepository @Inject constructor(
                 recurrence = task.recurrence,
                 weekdays = task.weekdays,
                 everyNDays = task.everyNDays,
+                monthDay = task.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 today = today,
@@ -1524,6 +1616,7 @@ class DefaultOrderRepository @Inject constructor(
                 recurrence = task.recurrence,
                 weekdays = task.weekdays,
                 everyNDays = task.everyNDays,
+                monthDay = task.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 today = today,
@@ -1556,6 +1649,7 @@ class DefaultOrderRepository @Inject constructor(
             unit = unit.trim().ifBlank { null },
             recurrence = recurrence,
             weekdays = encodeWeekdays(weekdays),
+            monthDay = if (recurrence == com.daigan.record.data.model.RecurrenceType.MONTHLY) monthDayOrNull() else null,
             everyNDays = if (recurrence == com.daigan.record.data.model.RecurrenceType.EVERY_N_DAYS) {
                 everyNOrNull()
             } else {

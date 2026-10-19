@@ -43,6 +43,7 @@ data class OrderDetailUiState(
     val lastBatchId: String? = null,
     val undoResult: UndoResult? = null,
     val paymentInFlight: Boolean = false,
+    val maintenanceInFlight: Boolean = false,
 )
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -71,6 +72,32 @@ class OrderDetailViewModel @Inject constructor(
     /** Emits after a payment or receipt correction committed, so dialogs can close. */
     private val _financialApplied = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val financialApplied: SharedFlow<Unit> = _financialApplied
+
+    private val _maintenanceApplied = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val maintenanceApplied: SharedFlow<Boolean> = _maintenanceApplied
+
+    fun updateOrderDates(periodId: String?, start: java.time.LocalDate?, end: java.time.LocalDate?) =
+        maintainOrder(false) { orderRepository.updateOrderDates(orderId, periodId, start, end) }
+
+    fun deleteOrder() = maintainOrder(true) { orderRepository.deleteUnusedOrder(orderId) }
+    fun cancelOrder() = maintainOrder(false) { orderRepository.cancelOrder(orderId) }
+
+    private fun maintainOrder(deleted: Boolean, block: suspend () -> Unit) {
+        if (_uiState.value.maintenanceInFlight) return
+        _uiState.value = _uiState.value.copy(maintenanceInFlight = true)
+        viewModelScope.launch {
+            try {
+                block()
+                _maintenanceApplied.emit(deleted)
+                emit(if (deleted) "已删除误建订单" else "订单已更新")
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                emit(error.message ?: "操作失败，请重试")
+            } finally {
+                _uiState.value = _uiState.value.copy(maintenanceInFlight = false)
+            }
+        }
+    }
 
     private val refreshTick = MutableStateFlow(0L)
     // ViewModel actions run on Main; acquire before launch so queued taps cannot overlap.

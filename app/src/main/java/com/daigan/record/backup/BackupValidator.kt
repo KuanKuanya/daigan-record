@@ -299,6 +299,9 @@ class BackupValidator @Inject constructor() {
                     "备份中的数值任务目标不大于起始值，无法恢复。"
                 }
             }
+            if (task.recurrence == RecurrenceType.MONTHLY) {
+                ensure(task.monthDay in 1..31) { "备份中的每月日号无效，无法恢复。" }
+            }
             if (task.recurrence == RecurrenceType.EVERY_N_DAYS) {
                 ensure((task.everyNDays ?: 0) >= 1) {
                     "备份中的任务间隔天数无效，无法恢复。"
@@ -320,6 +323,7 @@ class BackupValidator @Inject constructor() {
                 "备份中的打卡记录不属于托管订单，无法恢复。"
             }
             val expectedPrefix = when (task.recurrence) {
+                RecurrenceType.MONTHLY -> "M:"
                 RecurrenceType.DAILY -> "D:"
                 RecurrenceType.SELECTED_WEEKDAYS -> "S:"
                 RecurrenceType.EVERY_N_DAYS -> "E:"
@@ -334,6 +338,12 @@ class BackupValidator @Inject constructor() {
             val datePart = occurrence.occurrenceKey.removePrefix(expectedPrefix)
             ensure(runCatching { java.time.LocalDate.parse(datePart) }.isSuccess) {
                 "备份中的打卡记录日期无效，无法恢复。"
+            }
+            if (task.recurrence == RecurrenceType.MONTHLY) {
+                val date = java.time.LocalDate.parse(datePart)
+                ensure(date.dayOfMonth == task.monthDay && date == occurrence.gameDate) {
+                    "备份中的每月打卡日期与固定日号不一致，无法恢复。"
+                }
             }
             ensure((occurrence.windowStart == null) == (occurrence.windowEnd == null)) {
                 "备份中的打卡记录时间窗口不完整，无法恢复。"
@@ -551,6 +561,9 @@ class BackupValidator @Inject constructor() {
             ensure(category.name.isNotBlank()) { "备份中的模板分类缺少名称，无法恢复。" }
         }
         templateTasks.forEach { task ->
+            if (task.recurrence == RecurrenceType.MONTHLY) {
+                ensure(task.monthDay in 1..31) { "备份中的模板每月日号无效，无法恢复。" }
+            }
             ensure(templateById.containsKey(task.templateId)) {
                 "备份中的模板任务没有对应模板，无法恢复。"
             }

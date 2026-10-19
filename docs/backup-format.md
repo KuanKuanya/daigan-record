@@ -10,7 +10,9 @@
 
 `app_settings` 是本机身份及恢复提交标记，恢复时产生新身份；`reminder_deliveries` 是可重建的本机通知去重状态，恢复时清空。两表明确列入本地专用目录，不导出。提醒开关和时间与业务数据处于同一 Room 事务中恢复。
 
-v1 要求清单 schema 与当前应用 schema 完全一致（目前为 7）；不同 schema、未知格式或信封版本在替换前拒绝。数据库升级仍由既有迁移链处理，不能把任意历史逻辑备份假装为当前结构。
+v1.6 当前数据库 schema 为 8。可恢复 schema 8 及上一版 schema 7 的完整备份：仅为旧结构补齐 `orders.cancelledAt`、`task_definitions.monthDay` 和 `template_tasks.monthDay` 三个 NULL 列，其余列、表、类型和校验要求保持严格。其他 schema、未知格式或信封版本在替换前拒绝。schema 8 的备份不能在旧版应用中恢复。
+
+schema 8 备份保留订单作废标记及每月日号；作废不删除历史打卡、附件和收款。
 
 ## 可选加密信封
 

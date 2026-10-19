@@ -15,6 +15,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OccurrenceRulesTest {
+    @Test
+    fun `monthly fixed date skips missing days and respects period`() {
+        val start = LocalDate.of(2026, 1, 1)
+        fun slot(date: LocalDate, day: Int = 31) = OccurrenceRules.slotForDate(
+            RecurrenceType.MONTHLY, emptySet(), null, start, LocalDate.of(2026, 12, 31),
+            date, rules, monthDay = day,
+        )
+        assertEquals("M:2026-01-31", slot(LocalDate.of(2026, 1, 31))?.key)
+        assertNull(slot(LocalDate.of(2026, 2, 28)))
+        assertNull(slot(LocalDate.of(2026, 4, 30)))
+        assertEquals("M:2026-03-31", slot(LocalDate.of(2026, 3, 31))?.key)
+        assertNull(slot(LocalDate.of(2026, 3, 31), 32))
+    }
+
+
+    @Test
+    fun `monthly game day changes at refresh and stays inside hosting period`() {
+        val date = LocalDate.of(2028, 2, 29)
+        fun slot(now: Instant, end: LocalDate = date) = OccurrenceRules.slotForNow(
+            RecurrenceType.MONTHLY, emptySet(), null, date, end,
+            com.daigan.record.core.time.GameCalendar.gameDate(now, rules), rules, now, monthDay = 29,
+        )
+        assertNull(slot(Instant.parse("2028-02-28T19:59:59Z")))
+        assertEquals("M:2028-02-29", slot(Instant.parse("2028-02-28T20:00:00Z"))?.key)
+        assertNull(slot(Instant.parse("2028-02-29T20:00:00Z")))
+    }
 
     private val rules = GameRefreshRules(
         zoneId = ZoneId.of("Asia/Shanghai"),

@@ -3,10 +3,12 @@ package com.daigan.record.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.daigan.record.data.model.LoginMethod
@@ -116,6 +118,23 @@ class OwnerDetailScreenTest {
     }
 
     @Test
+    fun cancelledOrderShowsItsStatusAndRemainsOpenable() {
+        var opened: String? = null
+        val summary = shortOrderSummary()
+        setDetailContent(
+            ordersByAccount = mapOf(
+                "account-1" to listOf(summary.copy(order = summary.order.copy(cancelledAt = com.daigan.record.testing.fixedInstant))),
+            ),
+            onOpenOrder = { opened = it },
+        )
+
+        composeTestRule.onNodeWithText("已作废").assertExists()
+        composeTestRule.onNodeWithText("进行中").assertDoesNotExist()
+        composeTestRule.onNodeWithText("短期任务").performClick()
+        org.junit.Assert.assertEquals("order-1", opened)
+    }
+
+    @Test
     fun longGameNameAndLargeFontDoNotHideActions() {
         val longGameName = "重返未来：1999".repeat(4)
         composeTestRule.setContent {
@@ -166,6 +185,8 @@ class OwnerDetailScreenTest {
         // Restoring the owner remains available.
         composeTestRule.onNodeWithContentDescription("恢复老板").assertExists()
 
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").performScrollTo().performClick()
+
         // Credentials of the archived account stay viewable.
         composeTestRule.onNodeWithText("重返未来：1999").assertExists()
         composeTestRule.onNodeWithText("登录信息 · 账号密码").performClick()
@@ -191,6 +212,74 @@ class OwnerDetailScreenTest {
         )
 
         composeTestRule.onNodeWithText("已归档账号 · 1 个").assertExists()
+        composeTestRule.onNodeWithText("恢复").assertDoesNotExist()
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").performScrollTo().performClick()
         composeTestRule.onNodeWithText("恢复").assertExists()
+    }
+
+    @Test
+    fun archivedAccountsStartCollapsedAndCanBeViewedRestoredAndCollapsedAgain() {
+        var restored: String? = null
+        composeTestRule.setContent {
+            DaiganRecordTheme {
+                OwnerDetailContent(
+                    detail = ownerDetail(
+                        activeAccounts = emptyList(),
+                        archivedAccounts = listOf(account(archived = true)),
+                    ),
+                    onBack = {},
+                    onEditOwner = {},
+                    onAddAccount = {},
+                    onEditAccount = { _, _ -> },
+                    onCopy = {},
+                    onArchiveOwner = {},
+                    onRestoreOwner = {},
+                    onArchiveAccount = {},
+                    onRestoreAccount = { restored = it },
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").assertExists()
+        composeTestRule.onNodeWithText("重返未来：1999").assertDoesNotExist()
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("重返未来：1999").assertExists()
+        composeTestRule.onNodeWithText("登录信息 · 账号密码").performClick()
+        composeTestRule.onNodeWithText("demo-xiaoman").assertExists()
+        composeTestRule.onNodeWithText("恢复").performScrollTo().performClick()
+        org.junit.Assert.assertEquals("account-1", restored)
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("重返未来：1999").assertDoesNotExist()
+    }
+
+    @Test
+    fun archivedAccountExpansionSurvivesStateRestorationAndResetsForAnotherOwner() {
+        val restoration = StateRestorationTester(composeTestRule)
+        val selectedOwner = androidx.compose.runtime.mutableStateOf("owner-1")
+        restoration.setContent {
+            DaiganRecordTheme {
+                OwnerDetailContent(
+                    detail = ownerDetail(
+                        owner = owner(id = selectedOwner.value),
+                        activeAccounts = emptyList(),
+                        archivedAccounts = listOf(account(ownerId = selectedOwner.value, archived = true)),
+                    ),
+                    onBack = {},
+                    onEditOwner = {},
+                    onAddAccount = {},
+                    onEditAccount = { _, _ -> },
+                    onCopy = {},
+                    onArchiveOwner = {},
+                    onRestoreOwner = {},
+                    onArchiveAccount = {},
+                    onRestoreAccount = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").performScrollTo().performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        composeTestRule.onNodeWithText("重返未来：1999").assertExists()
+        composeTestRule.runOnIdle { selectedOwner.value = "owner-2" }
+        composeTestRule.onNodeWithText("已归档账号 · 1 个").assertExists()
+        composeTestRule.onNodeWithText("重返未来：1999").assertDoesNotExist()
     }
 }

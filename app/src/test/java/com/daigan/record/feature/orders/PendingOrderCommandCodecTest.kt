@@ -57,6 +57,13 @@ class PendingOrderCommandCodecTest {
     )
 
     @Test
+    fun monthlyTaskSurvivesPendingCommand() {
+        val monthly = form.copy(tasks = listOf(TaskDraft(title = "月常", recurrence = RecurrenceType.MONTHLY, monthDay = "31")))
+        val encoded = PendingOrderCommandCodec.encode(monthly, "monthly-op", "pay-op", 123L)
+        assertEquals(monthly, PendingOrderCommandCodec.decode(encoded)?.form)
+    }
+
+    @Test
     fun roundTripPreservesEveryFieldAndIdentity() {
         val encoded = PendingOrderCommandCodec.encode(
             form = form,

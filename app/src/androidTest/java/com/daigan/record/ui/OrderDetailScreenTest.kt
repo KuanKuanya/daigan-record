@@ -75,6 +75,16 @@ class OrderDetailScreenTest {
     }
 
     @Test
+    fun headerManagementExposesDateCorrectionAndCleanup() {
+        setContent(shortOrderDetailForUi())
+        composeTestRule.onNodeWithText("修改日期").assertDoesNotExist()
+        composeTestRule.onNodeWithText("管理").performClick()
+        composeTestRule.onNodeWithText("修改日期").assertExists()
+        composeTestRule.onNodeWithText("删除误建订单").assertExists()
+        composeTestRule.onNodeWithText("作废订单").assertExists()
+    }
+
+    @Test
     fun hostingCalendarToggleCarriesTheDisplayedOccurrenceKey() {
         // An active period: an expired order's history is intentionally read-only, so it
         // has no toggle to carry an identity.

@@ -183,6 +183,7 @@ class BackfillViewModel @Inject constructor(
                 recurrence = task.recurrence,
                 weekdays = task.weekdays,
                 everyNDays = task.everyNDays,
+                monthDay = task.monthDay,
                 periodStart = period.startDate,
                 periodEnd = period.endDate,
                 date = date,

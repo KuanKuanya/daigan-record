@@ -70,6 +70,7 @@ class ReceiptLedger @Inject constructor(
         }
 
         val order = orderDao.findById(request.orderId) ?: throw IllegalArgumentException("订单不存在")
+        require(order.cancelledAt == null) { "该订单已作废，不能新增收款；已有流水仍可更正或作废" }
         val priceCents = when (order.type) {
             OrderType.SHORT_TASK -> {
                 require(request.periodId == null) { "短期订单的收款不能指定托管期次" }

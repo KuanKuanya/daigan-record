@@ -45,6 +45,17 @@ class HostingCalendarModelTest {
     )
 
     @Test
+    fun monthlyCalendarOnlyOffersTheFixedDateAndUsesMonthlyCompletion() {
+        val task = task("monthly", RecurrenceType.MONTHLY).copy(monthDay = 31)
+        val day = LocalDate.of(2026, 10, 31)
+        val month = buildHostingCalendarMonth(period, listOf(task), listOf(done(task, day, "M:$day")), YearMonth.of(2026, 10), day)
+        assertEquals(listOf(day), month.days.filter { it.tasks.isNotEmpty() }.map { it.date })
+        assertEquals(HostingCalendarDayStatus.COMPLETE, month.days.last().status)
+        val february = period.copy(startDate = LocalDate.of(2027, 2, 1), endDate = LocalDate.of(2027, 2, 28))
+        assertTrue(buildHostingCalendarMonth(february, listOf(task), emptyList(), YearMonth.of(2027, 2), february.endDate).days.all { it.tasks.isEmpty() })
+    }
+
+    @Test
     fun dayIsLitOnlyWhenEveryScheduledTaskIsComplete() {
         val day = LocalDate.of(2026, 10, 19)
         val first = task("first")

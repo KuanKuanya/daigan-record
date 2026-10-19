@@ -2,6 +2,8 @@
 
 ## 当前 beta
 
+- [用户反馈与修复记录](user-feedback-issues.md)
+- [v1.6 用户反馈修复与验证](handoffs/v1.6-user-feedback.md)
 - [发布准备与版本规则](beta-release.md)
 - [公开介绍截图](images/readme/README.md)
 - [版本记录](../CHANGELOG.md)

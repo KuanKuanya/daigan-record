@@ -65,10 +65,12 @@ data class OrderEntity(
     val sourceTemplateId: String? = null,
     val sourceTemplateName: String? = null,
     val sourceTemplateVersion: String? = null,
+    val cancelledAt: Instant? = null,
 )
 
 /**
- * One hosting period. The price and refresh rules are immutable snapshots: a later
+ * One hosting period. Dates may be explicitly corrected with history guards.
+ * The price and refresh rules are immutable snapshots: a later
  * order-level change or a renewal must never rewrite an older period's terms.
  */
 @Entity(
@@ -170,6 +172,7 @@ data class TaskDefinitionEntity(
     val completionBatchId: String?,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val monthDay: Int? = null,
 )
 
 /**

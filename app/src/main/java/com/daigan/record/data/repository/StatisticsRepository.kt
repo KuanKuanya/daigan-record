@@ -68,7 +68,7 @@ class DefaultStatisticsRepository @Inject constructor(
         val receivedCents = Money.sumCents(receiptsInRange.map { it.amountCents })
 
         val ordersInRange = snapshot.orders.filter { order ->
-            within(order.createdAt, window.startInclusive, window.endExclusive)
+            order.cancelledAt == null && within(order.createdAt, window.startInclusive, window.endExclusive)
         }
         val hostingCount = ordersInRange.count { it.type == OrderType.HOSTING }
         val shortCount = ordersInRange.count { it.type == OrderType.SHORT_TASK }

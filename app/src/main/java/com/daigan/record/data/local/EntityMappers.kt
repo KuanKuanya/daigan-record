@@ -69,6 +69,7 @@ fun OrderEntity.toModel(): Order = Order(
     sourceTemplateId = sourceTemplateId,
     sourceTemplateName = sourceTemplateName,
     sourceTemplateVersion = sourceTemplateVersion,
+    cancelledAt = cancelledAt,
 )
 
 fun HostingPeriodEntity.toModel(): HostingPeriod = HostingPeriod(
@@ -101,6 +102,7 @@ fun TaskDefinitionEntity.toModel(): OrderTask = OrderTask(
     recurrence = recurrence,
     weekdays = parseWeekdays(weekdays),
     everyNDays = everyNDays,
+    monthDay = monthDay,
     sortOrder = sortOrder,
     completedAt = completedAt,
 )

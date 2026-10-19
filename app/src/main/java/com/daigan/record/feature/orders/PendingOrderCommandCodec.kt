@@ -99,6 +99,7 @@ internal object PendingOrderCommandCodec {
                     task.recurrence.name,
                     task.weekdays.sortedBy { it.value }.joinToString(",") { it.name },
                     task.everyNDays,
+                    task.monthDay,
                 ).joinToString(FIELD_SEPARATOR.toString()),
             )
         }
@@ -131,7 +132,7 @@ internal object PendingOrderCommandCodec {
         val taskCount = text("taskCount").toInt()
         val tasks = (0 until taskCount).map { index ->
             val fields = text("task.$index").split(FIELD_SEPARATOR)
-            check(fields.size == 8) { "malformed task" }
+            check(fields.size in 8..9) { "malformed task" }
             TaskDraft(
                 title = fields[0],
                 progressType = ProgressType.valueOf(fields[1]),
@@ -144,6 +145,7 @@ internal object PendingOrderCommandCodec {
                     .map(DayOfWeek::valueOf)
                     .toSet(),
                 everyNDays = fields[7],
+                monthDay = fields.getOrElse(8) { "" },
             )
         }
         RestoredOrderCommand(
