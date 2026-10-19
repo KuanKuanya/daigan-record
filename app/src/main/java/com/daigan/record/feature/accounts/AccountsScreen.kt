@@ -15,6 +15,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PendingActions
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,7 +72,6 @@ internal fun AccountsScreen(
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(
             title = "账号信息",
-            subtitle = "按老板分组，账号与登录信息一起查",
             actions = {
                 IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Filled.Settings, contentDescription = "设置")
@@ -137,22 +140,12 @@ private fun OwnerList(
             item {
                 EmptyStateCard(
                     title = "还没有老板资料",
-                    description = "点击“新增”记录第一位老板，然后在老板详情中添加游戏账号。" +
-                        "订单只能从具体游戏账号下创建，本页没有全局建单入口。",
+                    description = "新增老板资料并添加游戏账号。",
                 )
             }
         }
         items(owners, key = { it.owner.id }) { summary ->
             OwnerCard(summary = summary, onClick = { onOpenOwner(summary.owner.id) })
-        }
-        item {
-            Text(
-                text = "订单与打卡归属于具体游戏账号；收款、欠款与实收统计已按真实流水计算，" +
-                    "本版本不会显示虚构的实收或余额。游戏模板已可在设置中编辑与导入导出；" +
-                    "提醒与备份仍属于后续阶段。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -164,7 +157,8 @@ private fun OwnerCard(
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().testTag("owner-card-${summary.owner.id}"),
+        border = if (summary.unfinishedOrderCount > 0) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(
@@ -177,12 +171,28 @@ private fun OwnerCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (summary.unfinishedOrderCount > 0) {
+                    Icon(
+                        imageVector = Icons.Filled.PendingActions,
+                        contentDescription = "有未完成订单",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 8.dp).size(22.dp),
+                    )
+                }
                 Text(
                     text = summary.owner.nickname,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
                 StatusTag(text = summary.owner.displayNumber)
+            }
+            if (summary.unfinishedOrderCount > 0) {
+                Text(
+                    text = "进行中 · ${summary.unfinishedOrderCount} 单",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
             Text(
                 text = if (summary.activeAccountCount == 0) {

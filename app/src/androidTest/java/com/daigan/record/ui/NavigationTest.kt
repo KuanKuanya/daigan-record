@@ -11,9 +11,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.daigan.record.testing.awaitApplicationReady
 import com.daigan.record.MainActivity
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -34,10 +36,12 @@ class NavigationTest {
     @Before
     fun setUp() {
         hiltRule.inject()
+        composeTestRule.awaitApplicationReady()
     }
 
     @Test
     fun todayIsTheDefaultDestinationWithBothTabs() {
+        waitForText("还没有托管打卡")
         composeTestRule.onNodeWithText("托管打卡").assertExists()
         composeTestRule.onNodeWithText("短期任务").assertExists()
         composeTestRule.onNodeWithText("还没有托管打卡").assertExists()
@@ -85,10 +89,7 @@ class NavigationTest {
     }
 
     /**
-     * Phase 4 replaced the template placeholder with the real library. The test keeps its
-     * original intent (an independent settings sub-page with working back navigation) and
-     * now asserts the implemented feature. The pending copy is still covered for the
-     * reminder/backup entries below.
+     * The template library is an independent settings page with working back navigation.
      */
     @Test
     fun settingsTemplateEntryOpensTheRealLibraryAndKeepsBackNavigation() {
@@ -99,12 +100,13 @@ class NavigationTest {
         composeTestRule.onNodeWithTag("template-library").assertExists()
         composeTestRule.onNodeWithTag("template-library-new").assertExists()
         composeTestRule.onNodeWithTag("template-library-import").assertExists()
-        // Built-ins are seeded by the library itself, so the list is not empty.
+        // The generic starter is seeded by the library itself.
         composeTestRule.waitUntil(5_000) {
-            composeTestRule.onAllNodesWithText("重返未来：1999")
+            composeTestRule.onAllNodesWithText("通用模板")
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("鸣潮").assertExists()
+        assertTrue(composeTestRule.onAllNodesWithText("重返未来：1999").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeTestRule.onAllNodesWithText("鸣潮").fetchSemanticsNodes().isEmpty())
         composeTestRule.onAllNodesWithText("数据统计").assertCountEquals(0)
 
         composeTestRule.onNodeWithContentDescription("返回").performClick()
@@ -131,7 +133,7 @@ class NavigationTest {
         composeTestRule.onNodeWithTag("stats-income-label")
             .assertTextContains("月", substring = true)
         composeTestRule.onNodeWithText("全部待收").assertExists()
-        composeTestRule.onNodeWithText("含历史欠款", substring = true).assertExists()
+        composeTestRule.onNodeWithText("含历史欠款", substring = true).assertDoesNotExist()
         composeTestRule.onNodeWithText("全部收齐").assertExists()
         // Two honest zero amounts: this month's receipts and all-time debt.
         composeTestRule.onAllNodesWithText("¥0.00").assertCountEquals(2)

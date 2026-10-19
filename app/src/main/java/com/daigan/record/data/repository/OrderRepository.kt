@@ -368,7 +368,7 @@ class DefaultOrderRepository @Inject constructor(
             accountDao.observeAll().map { Unit },
             ownerDao.observeAll().map { Unit },
         ).mapLatest {
-            database.withTransaction { readOrderDetail(orderId) }
+            database.withDatasetTransaction { readOrderDetail(orderId) }
         }.flatMapLatest { snapshot ->
             if (snapshot == null) {
                 flowOf(null)
@@ -550,7 +550,7 @@ class DefaultOrderRepository @Inject constructor(
         require(errors.isEmpty()) { errors.values.first() }
         val priceCents = requireNotNull(draft.priceCentsOrNull) { "请填写约定总价" }
         val now = PersistedInstant.normalize(ticker.now())
-        val rules = GameRefreshRules.provisional(ZoneId.systemDefault())
+        val rules = draft.refresh ?: GameRefreshRules.provisional(ZoneId.systemDefault())
         val fingerprint = OrderCommandFingerprint.short(draft)
 
         return createOnce(draft.creationOperationId, OrderType.SHORT_TASK, fingerprint) {
@@ -684,11 +684,13 @@ class DefaultOrderRepository @Inject constructor(
         type: OrderType,
         fingerprint: String,
         create: suspend () -> CreatedOrder,
-    ): String {
+    ): String = DatasetGate.withWrite {
+        // The gate is entered before the transaction opens: a dataset replacement waits
+        // for this command to finish instead of interleaving with it.
         val attempted = runCatching {
-            database.withTransaction {
+            database.withDatasetTransaction {
                 existingCreationOrNull(operationId, type, fingerprint)?.let {
-                    return@withTransaction it.orderId
+                    return@withDatasetTransaction it.orderId
                 }
                 val created = create()
                 creationOperationDao.insert(
@@ -704,7 +706,7 @@ class DefaultOrderRepository @Inject constructor(
                 created.orderId
             }
         }
-        return attempted.getOrElse { error ->
+        attempted.getOrElse { error ->
             // The insert may lose a race against an identical concurrent command. The
             // rollback removed this attempt's order/receipt; return the winner instead.
             val winner = runCatching { creationOperationDao.findByOperationId(operationId) }
@@ -766,7 +768,7 @@ class DefaultOrderRepository @Inject constructor(
 
     override suspend fun setShortTaskCompleted(taskId: String, completed: Boolean) {
         val now = ticker.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
             val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
             require(order.type == OrderType.SHORT_TASK) { "只有短期任务可以单独勾选" }
@@ -792,7 +794,7 @@ class DefaultOrderRepository @Inject constructor(
 
     override suspend fun updateShortTaskProgress(taskId: String, value: BigDecimal) {
         val now = ticker.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
             require(task.progressType == ProgressType.NUMERIC) { "该任务不使用数值进度" }
             val order = orderDao.findById(task.orderId) ?: throw IllegalArgumentException("订单不存在")
@@ -820,9 +822,9 @@ class DefaultOrderRepository @Inject constructor(
     ): BulkCompletionResult {
         require(operationId.isNotBlank()) { "操作标识不能为空" }
         val now = ticker.now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             batchDao.findByOperationId(operationId)?.let { existing ->
-                return@withTransaction BulkCompletionResult(
+                return@withDatasetTransaction BulkCompletionResult(
                     batchId = existing.id,
                     completedCount = batchDao.findItems(existing.id).size,
                     skippedCount = 0,
@@ -895,7 +897,7 @@ class DefaultOrderRepository @Inject constructor(
         expectedOccurrenceKey: String?,
     ) {
         val now = ticker.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
             val period = task.periodId?.let { orderDao.findPeriod(it) }
                 ?: throw IllegalArgumentException("托管期次不存在")
@@ -951,7 +953,7 @@ class DefaultOrderRepository @Inject constructor(
         expectedOccurrenceKey: String?,
     ) {
         val now = ticker.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             val task = taskDao.findById(taskId) ?: throw IllegalArgumentException("任务不存在")
             require(task.progressType == ProgressType.NUMERIC) { "该任务不使用数值进度" }
             val period = task.periodId?.let { orderDao.findPeriod(it) }
@@ -995,9 +997,9 @@ class DefaultOrderRepository @Inject constructor(
         require(operationId.isNotBlank()) { "操作标识不能为空" }
         require(displayed.orderId == orderId) { "展示快照与订单不一致" }
         val now = ticker.now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             batchDao.findByOperationId(operationId)?.let { existing ->
-                return@withTransaction BulkCompletionResult(
+                return@withDatasetTransaction BulkCompletionResult(
                     batchId = existing.id,
                     completedCount = batchDao.findItems(existing.id).size,
                     skippedCount = 0,
@@ -1028,9 +1030,9 @@ class DefaultOrderRepository @Inject constructor(
     ): BulkCompletionResult {
         require(operationId.isNotBlank()) { "操作标识不能为空" }
         val now = ticker.now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             batchDao.findByOperationId(operationId)?.let { existing ->
-                return@withTransaction BulkCompletionResult(
+                return@withDatasetTransaction BulkCompletionResult(
                     batchId = existing.id,
                     completedCount = batchDao.findItems(existing.id).size,
                     skippedCount = 0,
@@ -1061,10 +1063,10 @@ class DefaultOrderRepository @Inject constructor(
 
     override suspend fun undoBatch(batchId: String): UndoResult {
         val now = ticker.now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             val batch = batchDao.findById(batchId) ?: throw IllegalArgumentException("找不到该批量操作")
             if (batch.undoneAt != null) {
-                return@withTransaction UndoResult(0, emptyList(), alreadyUndone = true)
+                return@withDatasetTransaction UndoResult(0, emptyList(), alreadyUndone = true)
             }
             val items = batchDao.findItems(batchId)
             // Undo is a write too: a stale screen must not mutate archived records.
@@ -1157,7 +1159,7 @@ class DefaultOrderRepository @Inject constructor(
         weeklyWindowStart: LocalDate?,
     ): Boolean {
         val now = ticker.now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             val order = orderDao.findById(orderId) ?: throw IllegalArgumentException("订单不存在")
             require(order.type == OrderType.HOSTING) { "只有托管订单可以补录" }
             requireWritableAccount(order.accountId, null)
@@ -1240,9 +1242,9 @@ class DefaultOrderRepository @Inject constructor(
         require(durationDays > 0) { "续期天数必须大于 0" }
         require(priceCents >= 0) { "续期价格不能为负数" }
         val now = ticker.now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             orderDao.findPeriodByOperationId(operationId)?.let { existing ->
-                return@withTransaction RenewalResult(
+                return@withDatasetTransaction RenewalResult(
                     periodId = existing.id,
                     periodIndex = existing.periodIndex,
                     startDate = existing.startDate,
@@ -1262,7 +1264,7 @@ class DefaultOrderRepository @Inject constructor(
             }
             val nextIndex = current.periodIndex + 1
             orderDao.findPeriodByIndex(orderId, nextIndex)?.let { existing ->
-                return@withTransaction RenewalResult(
+                return@withDatasetTransaction RenewalResult(
                     periodId = existing.id,
                     periodIndex = existing.periodIndex,
                     startDate = existing.startDate,

@@ -142,12 +142,6 @@ fun TemplateLibraryScreen(
                         Text("导入", modifier = Modifier.padding(start = 4.dp))
                     }
                 }
-                Text(
-                    text = "模板只作为新建订单时的默认值；修改、替换或删除模板不会改动已有订单、" +
-                        "价格、打卡或收款记录。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
 
             when {
@@ -159,7 +153,7 @@ fun TemplateLibraryScreen(
                 uiState.templates.isEmpty() -> Box(modifier = Modifier.padding(16.dp)) {
                     EmptyStateCard(
                         title = "模板库为空",
-                        description = "可以新建模板，或从 JSON 文件导入；当前没有可用的内置模板。",
+                        description = "导入模板",
                     )
                 }
 
@@ -181,13 +175,6 @@ fun TemplateLibraryScreen(
                                 createDocument.launch(exportFileName)
                             },
                             onDelete = { viewModel.requestDelete(template) },
-                        )
-                    }
-                    item {
-                        Text(
-                            text = "导入会先在预览中显示内容与同名冲突，取消不会改动任何模板。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }

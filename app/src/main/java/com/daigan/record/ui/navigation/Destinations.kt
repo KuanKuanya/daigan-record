@@ -10,7 +10,8 @@ object Routes {
     const val RECEIPTS = "settings/receipts"
     const val TEMPLATES = "settings/templates"
     const val TEMPLATE_EDITOR = "settings/templates/editor?templateId={templateId}"
-    const val SETTINGS_PLACEHOLDER = "settings/pending/{section}"
+    const val REMINDERS = "settings/reminders"
+    const val BACKUP = "settings/backup"
 
     const val ARCHIVED = "accounts/archived"
     const val OWNER_DETAIL = "accounts/owner/{ownerId}"
@@ -25,7 +26,6 @@ object Routes {
     const val ACCOUNT_ID_ARG = "accountId"
     const val ORDER_ID_ARG = "orderId"
     const val PERIOD_ID_ARG = "periodId"
-    const val SECTION_ARG = "section"
     const val TEMPLATE_ID_ARG = "templateId"
 
     val mainDestinations = setOf(TODAY, ACCOUNTS, STATS)
@@ -46,45 +46,30 @@ object Routes {
     fun orderBackfill(orderId: String, periodId: String): String =
         "orders/$orderId/backfill?periodId=$periodId"
 
-    fun settingsSection(section: SettingsSection): String = "settings/pending/${section.key}"
-
     fun templateEditor(templateId: String? = null): String =
         "settings/templates/editor?templateId=${templateId.orEmpty()}"
 }
 
-/**
- * Settings entries that exist in the approved design but are implemented in later
- * phases. They are shown as clearly marked pending pages instead of fake content.
- */
+/** The four approved settings destinations. All of them are implemented. */
 enum class SettingsSection(
     val key: String,
     val title: String,
-    val summary: String,
-    val pendingMessage: String,
 ) {
     RECEIPTS(
         key = "receipts",
         title = "收款明细",
-        summary = "查阅全部实收流水、归属期次与更正记录",
-        pendingMessage = "收款明细已在本版本提供。",
     ),
     TEMPLATES(
         key = "templates",
         title = "游戏模板",
-        summary = "编辑、导入与导出模板",
-        pendingMessage = "游戏模板已在本版本提供。",
     ),
     REMINDERS(
         key = "reminders",
         title = "提醒设置",
-        summary = "管理截止、到期和未完成提醒",
-        pendingMessage = "系统通知与提醒调度将在第五阶段实现，本版本不会申请通知权限。",
     ),
     BACKUP(
         key = "backup",
         title = "备份与恢复",
-        summary = "导出全部资料，可选密码保护，导入恢复",
-        pendingMessage = "备份与恢复将在第五阶段实现，本版本不会写出或读取任何备份文件。",
     ),
     ;
 

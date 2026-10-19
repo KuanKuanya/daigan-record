@@ -17,3 +17,22 @@ local.properties
 
 # Room/Gradle Kotlin build artifacts
 .kotlin/
+
+# Local deliverables and verification logs (publish APKs as Release assets)
+/artifacts/
+/.superpowers/
+
+# Generated files and editor/OS noise
+**/build/
+*.hprof
+*.tmp
+*~
+
+# Local signing material and environment configuration
+*.jks
+*.keystore
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example

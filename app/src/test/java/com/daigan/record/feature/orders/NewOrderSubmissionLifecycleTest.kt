@@ -2,6 +2,7 @@ package com.daigan.record.feature.orders
 
 import androidx.lifecycle.SavedStateHandle
 import com.daigan.record.data.model.HostingOrderDraft
+import com.daigan.record.data.model.OrderCommandFingerprint
 import com.daigan.record.data.model.OrderType
 import com.daigan.record.data.model.ShortOrderDraft
 import com.daigan.record.data.repository.OrderRepository
@@ -278,4 +279,25 @@ class NewOrderSubmissionLifecycleTest {
             repository.shortDrafts[1].creationOperationId,
         )
     }
+    @Test fun legacyPendingShortCommandRetainsIdentityAndLegacyCalendarOnRetry() = runTest {
+        val handle = savedState()
+        val originalRepository = RecordingOrderRepository().apply { failuresRemaining = 1 }
+        val original = newOrderViewModel(originalRepository, handle)
+        original.submit()
+        runCurrent()
+        val legacyDraft = originalRepository.shortDrafts.single().copy(refresh = null)
+        // Simulate a saved Phase 3/4 command: no provenance or calendar-mode additions.
+        handle["new-order.pending-command"] = handle.get<String>("new-order.pending-command")!!
+            .lineSequence().filterNot {
+                it.startsWith("sourceTemplate") || it.startsWith("explicitShortCalendar=")
+            }.joinToString("\n")
+        handle["new-order.pending-fingerprint"] = OrderCommandFingerprint.short(legacyDraft)
+        val repository = RecordingOrderRepository()
+        val restored = newOrderViewModel(repository, handle)
+        restored.submit()
+        runCurrent()
+        assertEquals(legacyDraft, repository.shortDrafts.single())
+        assertEquals("order-1", restored.uiState.value.createdOrderId)
+    }
+
 }

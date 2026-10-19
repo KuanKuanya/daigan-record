@@ -82,7 +82,6 @@ internal fun StatsContent(
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(
             title = "数据统计",
-            subtitle = "实收、待收与接单量",
             actions = {
                 IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Filled.Settings, contentDescription = "设置")
@@ -157,21 +156,13 @@ private fun StatisticsList(
             item {
                 EmptyStateCard(
                     title = "全部收齐",
-                    description = "当前没有任何待收款项。历史收款可在设置 → 收款明细中查看。",
+                    description = "",
                 )
             }
         } else {
             items(statistics.outstandingItems, key = { "${it.orderId}-${it.periodId}" }) { item ->
                 OutstandingRow(item = item, onClick = { onOpenOrder(item.orderId) })
             }
-        }
-        item {
-            Text(
-                text = "收入按实际收款时间归入所选范围；接单量按建单时间统计，续期不增加订单。" +
-                    "待收金额与列表始终包含全部历史欠款。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -217,11 +208,6 @@ private fun IncomeCard(statistics: Statistics, loading: Boolean) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            Text(
-                text = "含历史欠款，不随“本月 / 全部累计”筛选",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             Row {
                 Text(
@@ -400,11 +386,6 @@ private fun OutstandingHeader(statistics: Statistics) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = "不受本月筛选限制，包含已归档、已完成与已到期订单的历史欠款；收齐后自动移出。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

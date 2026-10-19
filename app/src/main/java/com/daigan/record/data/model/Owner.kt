@@ -46,6 +46,7 @@ object OwnerValidation {
 data class OwnerSummary(
     val owner: Owner,
     val accounts: List<GameAccount>,
+    val unfinishedOrderCount: Int = 0,
 ) {
     /** Active owners only carry active accounts; archived owners carry all of theirs. */
     val activeAccountCount: Int get() = accounts.size

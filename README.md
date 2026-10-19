@@ -1,98 +1,146 @@
-# 代肝记录
+<p align="center">
+  <img src="docs/design/app-icon/launcher-sage-preview.png" width="96" alt="代肝记录：鼠尾草绿猫耳手账图标">
+</p>
 
-面向个人游戏代肝从业者的离线 Android 应用。当前交付到 **Phase 4（游戏模板与模板文件交换）**：
-在 Phase 1–3 的老板/账号、短期与托管订单、打卡补录、实收/欠款、更正审计与统计之上，
-增加了可持久化编辑的游戏模板库、按模板建单的默认值，以及通过系统文档选择器完成的
-UTF-8 JSON 模板导入/导出。
+<h1 align="center">代肝记录</h1>
 
-- 应用名：`代肝记录`
-- applicationId / namespace：`com.daigan.record`
-- minSdk 26，compileSdk / targetSdk 36
-- 全离线：Manifest 未声明 `INTERNET` 权限，Android 自动云备份与设备迁移均已关闭
-- 中文界面，跟随系统深浅色
-- 数据库版本 6（v1–v3 为只读历史 schema，v4/v5 为 Phase 3 历史版本，v6 为当前版本）
+<p align="center">把老板、订单、每日打卡和收款，放进同一本小账本。</p>
+<p align="center"><strong>v1.5 Beta · Android 8.0+ · 离线使用 · 中文界面</strong></p>
 
-## 当前阶段能力
+接的单多了，最容易混在一起的往往是这些事：今天该上哪个号、这单做到哪一天、老板付了多少、还有哪笔钱没收齐。
 
-| 能力 | 状态 |
+**代肝记录**是一款为个人游戏代肝接单者制作的 Android 记录工具。把老板和账号建好，再把托管、短期任务和收款记进去，就可以从「今日事项」「账号信息」「数据统计」三个入口查看。
+
+游戏操作由使用者自行完成，应用负责记录任务、服务进度和账目。目前正在准备面向公众的 Beta 测试，欢迎带着实际使用场景来提问题和建议。
+
+## 先看看实际界面
+
+以下截图来自 **v1.5 的真实界面**，使用虚构的老板、游戏、账号和订单演示，不包含真实客户资料。
+
+<table>
+  <tr>
+    <td align="center"><strong>今天要做什么</strong><br><img src="docs/images/readme/01-today.png" width="250" alt="今日事项：托管任务与每日打卡"><br>按订单处理当天任务</td>
+    <td align="center"><strong>托管做到哪一天</strong><br><img src="docs/images/readme/03-calendar.png" width="250" alt="订单详情：完成日期点亮的托管打卡日历"><br>完成一天，日历亮起一天</td>
+    <td align="center"><strong>谁还有单在做</strong><br><img src="docs/images/readme/02-owners.png" width="250" alt="账号信息：有进行中订单的老板自动标记并置顶"><br>进行中的老板自动置顶</td>
+  </tr>
+</table>
+
+## 它能帮你记什么
+
+| 你想知道 | 在哪里看、怎么记 |
 |---|---|
-| 账号信息：老板与游戏账号增改、凭据查看复制、归档恢复 | 已实现，Room 持久化 |
-| 今日事项：托管打卡、短期任务、批量完成与撤销、历史补录 | 已实现（Phase 2） |
-| 订单：短期单 / 托管单、任务快照、托管续期、截图引用 | 已实现（Phase 2） |
-| 建单首笔实收（可选）与整单幂等 | 已实现；可填实际到账日期时间 |
-| 收款与欠款：部分收款、一次结清、期次归属、补录/更正、审计 | 已实现 |
-| 数据统计：本月/全部实收、全部待收、待收明细、报表时区 | 已实现 |
-| 设置 → 收款明细：有效流水、替换/作废与更正记录 | 已实现 |
-| 设置 → 游戏模板：列表、分类/任务编辑、默认值 | 已实现（Phase 4，Room 持久化） |
-| 模板文件：系统文档选择器导入预览、同名替换/另存为、导出 | 已实现（Phase 4） |
-| 账号默认模板与建单模板预填（任务、刷新规则、来源快照） | 已实现（可选，不强制） |
-| 提醒设置、备份与恢复 | 明确显示待实现，不属于本阶段 |
-| 云服务、发布签名、导出分享 | 未实现（不在本阶段范围） |
+| 今天还有哪些号没做？ | 「今日事项」查看托管打卡或短期任务，逐项完成，也支持批量完成与撤销。 |
+| 这位老板有哪些账号和订单？ | 「账号信息」按老板管理游戏账号、区服和登录资料；有进行中订单时自动标记、置顶。 |
+| 托管已经做了多少天？ | 订单详情的日历显示打卡状态，可选择历史日期补打卡或更正。 |
+| 老板续了下一期，旧记录怎么办？ | 到期后续期，原期次的价格、打卡和收款记录继续保留。 |
+| 这单究竟还欠多少钱？ | 记录约定价格和每笔实际收款，支持分次收款，分别查看实收和待收。 |
+| 每次建单都要重新填任务吗？ | 可用通用模板预填；按自己的业务编辑，也可以导入、导出模板文件。 |
+| 怕忘记任务，或者换手机怎么办？ | 在设置中开启业务提醒、导出完整备份，必要时用备份恢复资料。 |
 
-金额一律为整数分存储与计算，不使用浮点。约定价格不会自动变成“已收款”：
-只有用户实际录入的收款才计入实收。
+<table>
+  <tr>
+    <td align="center"><strong>实收和待收分开看</strong><br><img src="docs/images/readme/04-statistics.png" width="250" alt="数据统计：本月实收、待收与接单量"></td>
+    <td align="center"><strong>按自己的业务配模板</strong><br><img src="docs/images/readme/05-templates.png" width="250" alt="游戏模板：通用模板及导入入口"></td>
+    <td align="center"><strong>把资料备份好</strong><br><img src="docs/images/readme/06-backup.png" width="250" alt="备份与恢复：普通备份和密码加密选项"></td>
+  </tr>
+</table>
 
-模板只是**新建订单时的默认值**：建单时把任务、刷新规则和模板来源复制成订单自己的快照。
-之后编辑、替换、导入覆盖或删除模板，都不会改动已有订单、价格、打卡、收款或历史日期归属。
-模板 JSON 是单模板交换格式，不是业务数据备份。
+## 下载与安装
 
-## 幂等与时间契约
+- **系统要求：**Android 8.0 / API 26 及以上。目前提供 Android 版本。
+- **下载位置：**本仓库的 **[Releases](https://github.com/undefinedfrancis/daigan-record/releases)** 页面，选择最新 Beta，在 **Assets** 中下载 `.apk` 文件；`Source code` 是源码压缩包。
+- **发布状态：**当前测试基线为 v1.5，公开下载入口将在发布 Beta Release 后开放；若暂时没有 APK，请等待上架。
+- **安装：**在手机上打开 APK，按系统提示允许该下载来源安装应用。升级前先在应用内备份资料，尽量使用同一发布渠道的安装包覆盖升级。
 
-- 建单命令由 `order_creation_operations` 持久化：相同操作标识 + 相同规范化载荷
-  返回原订单与原首笔收款；载荷不同则拒绝；并发相同请求只创建一单。
-- 收款、更正、续期、批量完成各有唯一操作标识；相同重试返回原结果，不重复写行。
-- 时间统一按 **epoch 毫秒** 比较与持久化；`receivedAt`（实际到账）与 `createdAt`
-  （录入时间）严格分离，历史到账时间会进入对应月份的统计。
+当前安装包使用调试签名。后续若调整分发签名，会在 Release 说明中告知安装和迁移方式。
 
-## 构建与验证
+## 第一次用，按这五步来
 
-```bash
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home
-export ANDROID_HOME=/Users/francis/Library/Android/sdk
+### 1. 新增老板，再添加游戏账号
 
-./gradlew :app:testDebugUnitTest
-./gradlew :app:connectedDebugAndroidTest      # 需要已启动的模拟器或设备
-./gradlew :app:lintDebug :app:assembleDebug
-git diff --check
+打开 **账号信息 → 新增**，填写老板昵称。进入老板详情，添加游戏、区服、UID 和登录方式。
+
+一位老板可以有多个游戏账号。后续建单、查资料和看记录，都从这里找到对应的人和账号。
+
+### 2. 在账号下新建订单
+
+按工作内容选择：
+
+- **托管单：**适合连续多天的日常服务，填写开始和结束日期、本期价格、任务、时区及每日刷新时间。
+- **短期单：**适合活动、关卡等一次性委托，填写任务、约定价格和截止日期。
+
+可以先选通用模板再调整任务，也可以自行填写。时区默认提供中国时间和美国东部纽约时间，支持自行增删；纽约时区会处理夏令时，实际选择以对应游戏区服为准。
+
+### 3. 每天处理「今日事项」
+
+做完一项任务就勾选一项。托管和短期任务分别查看；需要时使用批量完成或撤销。
+
+进入订单详情可以查看打卡日历。漏记时，选择过去的服务日期，再勾选对应任务补打卡。批量完成处理当前应做任务，历史遗漏需要单独补录。
+
+### 4. 收到钱，再记录实收
+
+在订单的收款区域记录实际收到的金额，分次付款就分次记。
+
+例如，一张约定 **180 元**的托管单，先收到 **60 元**，还应收 **120 元**。约定价格和实际收款分别记录，方便核对。
+
+「数据统计」可查看本月或累计实收，以及全部待收款。短期单结单后，或托管服务到期后，老板名下没有其他进行中的订单，就会自动取消置顶。
+
+### 5. 按需开启提醒，定期备份
+
+进入 **设置 → 提醒设置**，开启需要的提醒并设置时间，按手机提示允许通知。
+
+进入 **设置 → 备份与恢复** 导出资料，可以选择密码加密。恢复备份会替换现有资料，请先备份当前记录；加密备份的密码需要自行妥善保存。
+
+## 邀请你一起测试
+
+这次公开测试尤其希望听到这些反馈：
+
+- **能否顺手地记一单：**建老板、添加账号、建单的流程是否清楚？
+- **会不会漏记或记错：**当天任务、补打卡、续期和撤销是否符合实际工作习惯？
+- **钱能否对得上：**分次收款、欠款和统计结果是否容易理解、核对？
+- **你的手机上是否好用：**小屏、大字体、深色模式、通知和安装更新有没有问题？
+- **什么操作最费劲：**哪一步太绕、哪个字段多余、什么内容最想一眼看见？
+
+请优先通过本仓库的 **[Issues](https://github.com/undefinedfrancis/daigan-record/issues)** 提交问题，建议一件问题单独发一条。可以参考：
+
+```text
+应用版本：
+手机型号 / Android 版本：
+遇到问题的页面：
+操作步骤：
+我预期会发生什么：
+实际发生了什么：
+是否每次都能复现：
+截图或录屏（可选）：
 ```
 
-调试 APK：`app/build/outputs/apk/debug/app-debug.apk`
+分享截图或录屏前，请遮挡真实昵称、账号、密码、UID 和收款资料。反馈时无需提供完整业务备份。
 
-## 结构
+## 关于本地数据与 Beta
 
-```
-app/src/main/java/com/daigan/record/
-├── core/time/          时间源、游戏日历、报表时区/窗口、毫秒精度常量
-├── data/local/         Room 实体、DAO、数据库、类型转换器、迁移
-├── data/model/         领域模型、金额、余额、收款、统计、模板、表单校验、命令指纹
-├── data/template/      模板 JSON 编解码、内置资产、SAF 文件读写
-├── data/repository/    Repository 实现、ReceiptLedger、LedgerSnapshotSource
-├── data/di/            Hilt 绑定
-├── feature/accounts/   老板与账号列表、详情、表单、归档
-├── feature/orders/     建单、订单详情、收款/更正对话框、命令恢复编解码
-├── feature/today/      今日事项
-├── feature/stats/      数据统计（月/全部）
-├── feature/settings/   独立设置页、收款明细页
-├── feature/templates/  模板库、模板编辑器、导入预览
-└── ui/                 主题、导航、通用组件
+- 资料保存在手机本地，应用不申请网络权限；目前没有云端同步或多人协作。
+- 完整备份可带走业务资料与附件。模板 JSON 只交换任务模板，不是业务资料备份。
+- 本地保存不等于本机数据库已加密；备份文件可选密码加密，请自行管理手机和文件的访问权限。
+- 目前主要在 Android 模拟器上验证，实体机兼容性仍需要更多用户帮助测试。建议先用少量演示记录熟悉流程，再逐步投入实际使用。
+
+## 开发与项目资料
+
+使用 Kotlin、Jetpack Compose、Room、Hilt 和 WorkManager。开发环境为 JDK 21、Android SDK 36，使用仓库自带的 Gradle Wrapper。
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+# 连接设备或模拟器后：
+./gradlew :app:connectedDebugAndroidTest
 ```
 
-数据流固定为 Compose → ViewModel → Repository → DAO → Room；ViewModel 不接触 DAO 或文件。
+调试包输出在 `app/build/outputs/apk/debug/app-debug.apk`。本机 SDK 路径通过 `local.properties` 或 Android Studio 配置，构建说明见 [贡献约定](CONTRIBUTING.md)。
 
-## 文档
+- [版本记录](CHANGELOG.md)
+- [文档索引](docs/README.md)
+- [测试与验收](docs/testing.md)
+- [Beta 发布准备](docs/beta-release.md)
+- [图标设计与来源](docs/design/app-icon/README.md)
 
-- 需求：`docs/superpowers/specs/2026-10-17-game-work-manager-design.md`
-- 架构补充：`docs/superpowers/plans/2026-10-17-architecture-foundation.md`
-- 上游底座：`docs/upstream-foundation.md`
-- 数据模型（含 v4/v5 迁移与收款语义）：`docs/data-model.md`
-- 阶段交接：`docs/handoffs/phase-4.md`
-- 历史交接：`docs/handoffs/phase-1.md`、`docs/handoffs/phase-2.md`、
-  `docs/handoffs/phase-3.md`、`docs/handoffs/phase-3-fix-1.md`、`docs/handoffs/phase-3-fix-2.md`
-- 模板内容来源与核实：`docs/game-template-sources.md`
-- 模板文件格式：`docs/template-file-format.md`
+## 来源与许可
 
-## 上游来源与许可
-
-源码底座来自 Google `android/architecture-templates` 的 `base` 分支，固定提交
-`cdb6de476e1889c88947946c28d900b3537dc867`，遵循 Apache License 2.0（见 `LICENSE`）。
-派生文件的版权声明已保留，具体改动见 `docs/upstream-foundation.md`。
+源码底座来自 Google `android/architecture-templates`，遵循 [Apache License 2.0](LICENSE)。派生文件保留版权声明，详见 [上游来源记录](docs/upstream-foundation.md)。

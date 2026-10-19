@@ -1,7 +1,7 @@
-# 数据模型（Phase 1 + Phase 2 + Phase 3 + Phase 4 已实现）
+# 数据模型（Phase 1–5）
 
-Room/SQLite 是业务资料唯一事实来源。本文件只描述**已经实现并经过迁移测试**的表；
-提醒与备份仍属于后续阶段，未创建空表，也没有占位实现。游戏模板库自 Phase 4 起是真实
+Room/SQLite 是业务资料唯一事实来源。本文件描述已实现的持久化结构；第五阶段实际验证证据见 `docs/handoffs/phase-5.md`。
+提醒设置、投递去重与本机资料身份自第五阶段加入。游戏模板库自 Phase 4 起是真实
 持久化表，但只是**新建订单时的默认值**，不是业务记录的事实来源。
 
 Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`。
@@ -13,11 +13,12 @@ Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`
 | 3 | `3.json` | **只读历史夹具**，Phase 2 验收基线 |
 | 4 | `4.json` | 历史版本：Phase 3 首版收款表 |
 | 5 | `5.json` | 历史版本：Phase 3 验收基线 |
-| 6 | `6.json` | 当前生产版本（Phase 4 模板库与来源列） |
+| 6 | `6.json` | 只读历史版本（Phase 4 模板库与来源列） |
+| 7 | `7.json` | 当前版本（提醒设置、投递记录、本机资料身份） |
 
 `exportSchema = true`，没有 `fallbackToDestructiveMigration`。生产构建通过
 `RecordDatabase.ALL_MIGRATIONS` 注册 `MIGRATION_1_2`、`MIGRATION_2_3`、
-`MIGRATION_3_4`、`MIGRATION_4_5` 与 `MIGRATION_5_6`。
+`MIGRATION_3_4`、`MIGRATION_4_5`、`MIGRATION_5_6` 与 `MIGRATION_6_7`。
 
 类型转换器：
 
@@ -288,7 +289,7 @@ Phase 2 新增的**归档守卫**（见第 5 节）在归档老板/账号时要�
 | `weeklyRefreshMinutes` | INTEGER | 非空 |
 | `origin` | TEXT | `BUILT_IN` / `USER` / `IMPORTED` |
 | `builtInKey` | TEXT | 可空；唯一索引；内置模板的稳定种子标识 |
-| `sortOrder` | INTEGER | 非空；稳定的库内顺序（内置为 0/1/2） |
+| `sortOrder` | INTEGER | 非空；稳定的库内顺序（通用模板为 0） |
 | `createdAt` / `updatedAt` | INTEGER | 非空 |
 
 `index_game_templates_builtInKey` 唯一索引让重复初始化不可能写入第二份内置模板。
@@ -328,7 +329,7 @@ Phase 2 新增的**归档守卫**（见第 5 节）在归档老板/账号时要�
 
 | 列 | 类型 | 约束 |
 |---|---|---|
-| `seedKey` | TEXT | 主键；内置模板的稳定键（`reverse-1999` / `wuthering-waves` / `generic`） |
+| `seedKey` | TEXT | 主键；稳定种子键；历史游戏键用于旧安装清理，当前新装仅写入 `generic` |
 | `appliedAt` | INTEGER | 非空 |
 
 初始化只对“没有标记”的键执行一次。标记在模板被用户删除后仍然保留，因此下次启动
@@ -579,7 +580,7 @@ interface TemplateFileRepository {
   `Phase3AcceptanceReviewTest`。
 - Phase 4 模板测试：`GameTemplateRepositoryTest`（初始化幂等、编辑保留、删除不复活、
   重启持久化、账号默认清理、同名另存/替换、非法导入零写入、ID 冲突重映射）、
-  `TemplateOrderSnapshotTest`（三款内置模板各建托管/短期单、完成任务、编辑/替换/删除后
+  `TemplateOrderSnapshotTest`（通用模板建托管/短期单、完成任务、编辑/替换/删除后
   订单快照不变、旧账号旧订单无需模板）、`BuiltInTemplateContentTest`（资产可解析、
   顺序、刷新时刻、五种周期）、`TemplateFileExchangeTest`（UTF-8 往返、超限、不可读文档）。
 - JVM：`TemplateDraftTest`、`TemplateFileCodecTest`、`NewOrderTemplateDefaultsTest`、
@@ -587,7 +588,28 @@ interface TemplateFileRepository {
 
 ## 9. 尚未实现（不是本阶段的隐含承诺）
 
-- 系统通知/提醒、备份与恢复、加密、应用锁（后续阶段/产品明确不需要）。
-- 模板文件是单个模板的交换格式，**不是业务备份**；完整备份/恢复仍待实现。
+- 应用锁/本机身份验证：产品明确不要求。
+- 模板文件是单个模板的交换格式，**不是业务备份**；完整备份/恢复使用独立的 `daigan-backup` 格式。
 - 模板在线商店、自动从网络更新模板、跨设备同步、导出/分享报表、云服务与发布签名。
 - 深眠域等“双周”或“每月两次”的节奏没有专用周期类型；只能用可编辑的周期近似。
+
+
+## 10. Phase 5 本机设置与资料替换
+
+迁移 6→7 只新建三张表，不重写任何旧业务行：
+
+| 表 | 主键 | 用途 | 完整备份 |
+|---|---|---|---|
+| reminder_settings | id=0 | 三类提醒各自开关、手机本地分钟数、更新时间 | 包含 |
+| app_settings | id=0 | datasetInstanceId、lastRestoreId、createdAt | 排除，本机重建 |
+| reminder_deliveries | category + day | 当地日期成功投递记录，避免重复提醒 | 排除，恢复后清空并重排 |
+
+无设置行时提醒全部关闭。每类时间为 0..1439 分钟；业务资格仍使用订单/期次的游戏时区及日/周刷新快照。
+
+完整备份包含 18 张业务表的原始标识、操作记录、金额、时间、枚举和精确十进制文本，并包含附件文件字节。`app_settings` 与 `reminder_deliveries` 是明确排除的本机协调状态；不备份 Room、SQLite 或 WorkManager 的内部表。
+
+`DatasetGate` 在 Room 事务前取得共享许可；导出和恢复使用串行排他许可。完成替换时递增代次，拒绝旧资料期间排队的写入。取消不泄漏许可；嵌套仓库事务复用当前协程许可。附件发布另由 AttachmentSync 串行保护。
+
+恢复提交在一个 Room 事务里整体删除/重建业务行和提醒设置，并写入新的本机 datasetInstanceId 和 lastRestoreId；文件系统使用阶段日志与目录重命名配合。启动恢复成功前页面及 Worker 不开放。MainActivity 按资料身份重建导航，拒绝恢复旧资料的 Activity 状态。损坏恢复日志及未完成的回滚会锁定资料并提供重试，不自动清库。
+
+参见 `docs/backup-format.md`、`docs/backup-recovery.md`、`docs/reminder-behavior.md`。迁移验证入口 `MigrationV6ToV7Test`，包括旧业务表逐列保留、全历史 schema 链及新旧建库设置一致性。

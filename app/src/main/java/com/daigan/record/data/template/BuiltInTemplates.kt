@@ -17,19 +17,13 @@ data class BuiltInTemplateDescriptor(
     val assetPath: String,
 )
 
-/**
- * Built-in order is part of the product decision: Reverse: 1999 first, Wuthering Waves
- * second, then the reusable generic template. The content of each asset is documented
- * (with its evidence level) in `docs/game-template-sources.md`.
- */
+/** Only the reusable starter template ships; game-specific templates can be imported. */
 object BuiltInTemplates {
     const val REVERSE_1999_KEY = "reverse-1999"
     const val WUTHERING_WAVES_KEY = "wuthering-waves"
     const val GENERIC_KEY = "generic"
 
     val ALL: List<BuiltInTemplateDescriptor> = listOf(
-        BuiltInTemplateDescriptor(REVERSE_1999_KEY, "templates/reverse-1999.json"),
-        BuiltInTemplateDescriptor(WUTHERING_WAVES_KEY, "templates/wuthering-waves.json"),
         BuiltInTemplateDescriptor(GENERIC_KEY, "templates/generic.json"),
     )
 }

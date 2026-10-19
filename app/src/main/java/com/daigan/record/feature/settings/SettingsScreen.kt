@@ -21,14 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.daigan.record.ui.components.EmptyStateCard
 import com.daigan.record.ui.components.PageHeader
 import com.daigan.record.ui.navigation.SettingsSection
 
-/**
- * Independent settings destination: it has back navigation, no bottom navigation and
- * four entries whose real features arrive in later phases.
- */
+/** Independent settings destination with a back action and four compact entries. */
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -52,16 +48,10 @@ fun SettingsScreen(
                     if (index > 0) HorizontalDivider()
                     SettingsEntry(
                         title = section.title,
-                        summary = section.summary,
                         onClick = { onOpenSection(section) },
                     )
                 }
             }
-            EmptyStateCard(
-                title = "收款明细与游戏模板已可用",
-                description = "收款明细展示真实实收流水与更正记录；游戏模板支持编辑、导入与导出，" +
-                    "只在新建订单时提供默认值。提醒设置、备份与恢复仍会明确显示待实现说明。",
-            )
         }
     }
 }
@@ -69,7 +59,6 @@ fun SettingsScreen(
 @Composable
 private fun SettingsEntry(
     title: String,
-    summary: String,
     onClick: () -> Unit,
 ) {
     Row(
@@ -82,11 +71,6 @@ private fun SettingsEntry(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,

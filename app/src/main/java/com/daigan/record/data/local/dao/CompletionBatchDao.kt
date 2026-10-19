@@ -35,4 +35,12 @@ interface CompletionBatchDao {
 
     @Query("SELECT COUNT(*) FROM completion_batches")
     suspend fun count(): Int
+
+    /** Typed full read used by backup validation (runs every converter). */
+    @Query("SELECT * FROM completion_batches")
+    suspend fun findAllBatches(): List<CompletionBatchEntity>
+
+    /** Typed full read used by backup validation (runs every converter). */
+    @Query("SELECT * FROM completion_batch_items")
+    suspend fun findAllItems(): List<CompletionBatchItemEntity>
 }

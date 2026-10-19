@@ -9,11 +9,14 @@ import com.daigan.record.data.model.TemplateDraft
 import com.daigan.record.data.model.TemplateOrderKind
 import com.daigan.record.data.model.provenance
 import com.daigan.record.data.model.toTaskDraft
+import com.daigan.record.data.local.entity.GameTemplateEntity
+import com.daigan.record.data.model.TemplateOrigin
 import com.daigan.record.data.template.BuiltInTemplates
 import com.daigan.record.data.template.TemplateFileContent
 import com.daigan.record.testing.OrderTestEnvironment
 import com.daigan.record.testing.hostingDraft
 import java.time.LocalDate
+import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -55,10 +58,10 @@ class GameTemplateRepositoryTest {
 
         val first = summaries()
         assertEquals(
-            listOf("重返未来：1999", "鸣潮", "通用模板"),
+            listOf("通用模板"),
             first.map { it.gameName },
         )
-        assertEquals(3, first.size)
+        assertEquals(1, first.size)
         first.forEach { summary ->
             assertEquals(com.daigan.record.data.model.TemplateOrigin.BUILT_IN, summary.origin)
             assertTrue("${summary.gameName} needs hosting tasks", summary.hostingTaskCount > 0)
@@ -67,7 +70,61 @@ class GameTemplateRepositoryTest {
 
         // A second initialization is a no-op: no duplicate rows, no rewritten counts.
         env.templateRepository.ensureBuiltInTemplates()
-        assertEquals(3, summaries().size)
+        assertEquals(1, summaries().size)
+    }
+
+    @Test
+    fun startupRemovesLegacyBuiltInsAndClearsOnlyTheirAccountDefaults() = runBlocking {
+        val dao = env.database.templateDao()
+        val now = Instant.parse("2026-10-19T00:00:00Z")
+        listOf(
+            BuiltInTemplates.REVERSE_1999_KEY to "旧重返模板",
+            BuiltInTemplates.WUTHERING_WAVES_KEY to "旧鸣潮模板",
+        ).forEachIndexed { index, (key, name) ->
+            dao.insertTemplate(
+                GameTemplateEntity(
+                    id = "legacy-$key",
+                    gameName = name,
+                    templateVersion = "1",
+                    gameVersionNotes = null,
+                    zoneId = "Asia/Shanghai",
+                    dailyRefreshMinutes = 300,
+                    weeklyRefreshDay = 1,
+                    weeklyRefreshMinutes = 300,
+                    origin = TemplateOrigin.BUILT_IN,
+                    builtInKey = key,
+                    sortOrder = index,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+        val owner = env.ownerRepository.createOwner("旧模板账号")
+        val oldAccount = env.accountRepository.createAccount(
+            owner.id,
+            AccountDraft("旧重返模板", "官服", "legacy", "legacy", LoginMethod.VERIFICATION_CODE,
+                defaultTemplateId = "legacy-${BuiltInTemplates.REVERSE_1999_KEY}"),
+        )
+        val importedId = env.templateRepository.saveTemplate(
+            TemplateDraft(
+                gameName = "旧鸣潮模板",
+                categories = listOf(
+                    com.daigan.record.data.model.TemplateCategoryDraft(
+                        name = "日常",
+                        tasks = listOf(com.daigan.record.data.model.TemplateTaskDraft(title = "每日任务")),
+                    ),
+                ),
+            ),
+        )
+
+        env.templateRepository.ensureBuiltInTemplates()
+        env.templateRepository.ensureBuiltInTemplates()
+
+        assertNull(env.templateRepository.findTemplate("legacy-${BuiltInTemplates.REVERSE_1999_KEY}"))
+        assertNull(env.templateRepository.findTemplate("legacy-${BuiltInTemplates.WUTHERING_WAVES_KEY}"))
+        assertNull(env.accountRepository.findAccount(oldAccount.id)!!.defaultTemplateId)
+        assertEquals("旧鸣潮模板", env.templateRepository.findTemplate(importedId)!!.gameName)
+        assertEquals(listOf("通用模板", "旧鸣潮模板"), summaries().map { it.gameName })
     }
 
     @Test
@@ -85,7 +142,7 @@ class GameTemplateRepositoryTest {
         val reloaded = env.templateRepository.findTemplate(generic.id)!!
         assertEquals("我的通用模板", reloaded.gameName)
         assertEquals("2.0", reloaded.templateVersion)
-        assertEquals(3, summaries().size)
+        assertEquals(1, summaries().size)
         assertEquals(
             "a built-in keeps its origin after the user edits it",
             com.daigan.record.data.model.TemplateOrigin.BUILT_IN,
@@ -101,7 +158,7 @@ class GameTemplateRepositoryTest {
 
         env.templateRepository.ensureBuiltInTemplates()
 
-        assertEquals(listOf("重返未来：1999", "鸣潮"), summaries().map { it.gameName })
+        assertEquals(emptyList<String>(), summaries().map { it.gameName })
         assertNull(env.templateRepository.findTemplate(generic.id))
     }
 
@@ -141,7 +198,7 @@ class GameTemplateRepositoryTest {
                 assertEquals("每日签到", reloaded.categories.single().tasks.single().title)
                 assertEquals("persisted-category", reloaded.categories.single().id)
                 assertEquals("persisted-task", reloaded.categories.single().tasks.single().id)
-                assertEquals(4, second.templateRepository.findAllSummaries().size)
+                assertEquals(2, second.templateRepository.findAllSummaries().size)
             } finally {
                 second.close(deleteDatabaseFile = true)
             }
@@ -153,7 +210,7 @@ class GameTemplateRepositoryTest {
     @Test
     fun deletingATemplateClearsTheAccountDefaultButKeepsOrders() = runBlocking {
         env.templateRepository.ensureBuiltInTemplates()
-        val template = templateByName("重返未来：1999")
+        val template = templateByName("通用模板")
         val owner = env.ownerRepository.createOwner("模板验收")
         val account = env.accountRepository.createAccount(
             owner.id,
@@ -187,7 +244,7 @@ class GameTemplateRepositoryTest {
         assertEquals(before!!.order, after.order)
         assertEquals(before.tasks, after.tasks)
         assertEquals(before.currentPeriod, after.currentPeriod)
-        assertEquals("重返未来：1999", after.order.sourceTemplateName)
+        assertEquals("通用模板", after.order.sourceTemplateName)
         assertEquals(template.templateVersion, after.order.sourceTemplateVersion)
         // The account itself and every order remain usable without a template.
         assertNotNull(env.accountRepository.findAccount(account.id))
@@ -196,7 +253,7 @@ class GameTemplateRepositoryTest {
     @Test
     fun saveAsAndReplaceResolveASameNameConflictExplicitly() = runBlocking {
         env.templateRepository.ensureBuiltInTemplates()
-        val original = templateByName("重返未来：1999")
+        val original = templateByName("通用模板")
         val importedDraft = TemplateDraft.from(original).copy(
             gameVersionNotes = "来自文件的版本",
             categories = listOf(
@@ -222,7 +279,7 @@ class GameTemplateRepositoryTest {
             TemplateImportResolution.SaveAs,
         )
         assertFalse(saveAs.replaced)
-        assertEquals("重返未来：1999（导入）", saveAs.gameName)
+        assertEquals("通用模板（导入）", saveAs.gameName)
         assertNotEquals(original.id, saveAs.templateId)
         val saved = env.templateRepository.findTemplate(saveAs.templateId)!!
         assertEquals("来自文件的版本", saved.gameVersionNotes)
@@ -235,7 +292,7 @@ class GameTemplateRepositoryTest {
         val replaced = env.templateRepository.importTemplate(
             TemplateFileContent(
                 templateId = UUID.randomUUID().toString(),
-                draft = importedDraft.copy(gameName = "重返未来：1999"),
+                draft = importedDraft.copy(gameName = "通用模板"),
                 categoryCount = 1,
                 taskCount = 1,
             ),
@@ -249,7 +306,7 @@ class GameTemplateRepositoryTest {
         // The save-as entry is untouched by replacing the original.
         assertEquals("导入任务", env.templateRepository.findTemplate(saveAs.templateId)!!
             .categories.first().tasks.first().title)
-        assertEquals(4, summaries().size)
+        assertEquals(2, summaries().size)
     }
 
     @Test

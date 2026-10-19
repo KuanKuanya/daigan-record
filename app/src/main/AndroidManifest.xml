@@ -17,10 +17,16 @@
 
 <!--
   Offline-only application: no INTERNET permission is declared. Automatic Android
-  cloud backup is disabled because the local database stores customer login
-  credentials; Phase 5 provides explicit, optionally encrypted backup instead.
+  cloud backup stays disabled because the local database stores customer login
+  credentials; the explicit, optionally encrypted backup in Settings is the only way
+  data leaves the app.
+
+  POST_NOTIFICATIONS is requested at runtime only when the user enables a reminder.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".RecordApplication"
@@ -35,6 +41,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.DaiganRecord">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -42,6 +49,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          WorkManager is initialized on demand through RecordApplication's
+          Configuration.Provider so Hilt can construct the reminder worker.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <receiver
+            android:name=".notifications.ReminderTimeChangeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

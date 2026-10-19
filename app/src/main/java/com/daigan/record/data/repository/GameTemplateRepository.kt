@@ -125,8 +125,8 @@ class DefaultGameTemplateRepository @Inject constructor(
     }
 
     override suspend fun findTemplate(templateId: String): GameTemplate? =
-        database.withTransaction {
-            val template = templateDao.findTemplate(templateId) ?: return@withTransaction null
+        database.withDatasetTransaction {
+            val template = templateDao.findTemplate(templateId) ?: return@withDatasetTransaction null
             template.toModel(
                 categories = templateDao.findCategories(templateId),
                 tasks = templateDao.findTasks(templateId),
@@ -134,7 +134,7 @@ class DefaultGameTemplateRepository @Inject constructor(
         }
 
     override suspend fun findAllSummaries(): List<GameTemplateSummary> =
-        database.withTransaction {
+        database.withDatasetTransaction {
             val templates = templateDao.findAllTemplates()
             val categories = templates.associate { it.id to templateDao.findCategories(it.id) }
             val tasks = templates.associate { it.id to templateDao.findTasks(it.id) }
@@ -160,6 +160,25 @@ class DefaultGameTemplateRepository @Inject constructor(
 
     override suspend fun ensureBuiltInTemplates() {
         seedMutex.withLock {
+            database.withDatasetTransaction {
+                val removedKeys = listOf(
+                    BuiltInTemplates.REVERSE_1999_KEY,
+                    BuiltInTemplates.WUTHERING_WAVES_KEY,
+                )
+                templateDao.findTemplatesByBuiltInKeys(removedKeys).forEach { legacy ->
+                    if (legacy.origin == TemplateOrigin.BUILT_IN) {
+                        templateDao.clearAccountDefault(legacy.id)
+                        templateDao.deleteTasks(legacy.id)
+                        templateDao.deleteCategories(legacy.id)
+                        templateDao.deleteTemplate(legacy.id)
+                    }
+                }
+                removedKeys.forEach { key ->
+                    if (templateDao.seedAppliedCount(key) == 0) {
+                        templateDao.insertSeedState(TemplateSeedStateEntity(key, now()))
+                    }
+                }
+            }
             BuiltInTemplates.ALL.forEachIndexed { descriptorIndex, descriptor ->
                 if (templateDao.seedAppliedCount(descriptor.seedKey) > 0) return@forEachIndexed
                 val bytes = runCatching { builtInSource.read(descriptor.assetPath) }.getOrNull()
@@ -167,15 +186,15 @@ class DefaultGameTemplateRepository @Inject constructor(
                 val content = (TemplateFileCodec.decode(bytes) as? TemplateFileResult.Success)
                     ?.content
                     ?: return@forEachIndexed
-                database.withTransaction {
+                database.withDatasetTransaction {
                     if (templateDao.seedAppliedCount(descriptor.seedKey) > 0) {
-                        return@withTransaction
+                        return@withDatasetTransaction
                     }
                     if (templateDao.findTemplateByBuiltInKey(descriptor.seedKey) != null) {
                         templateDao.insertSeedState(
                             TemplateSeedStateEntity(descriptor.seedKey, now()),
                         )
-                        return@withTransaction
+                        return@withDatasetTransaction
                     }
                     insertNew(
                         templateId = content.templateId,
@@ -197,7 +216,7 @@ class DefaultGameTemplateRepository @Inject constructor(
         val normalized = draft.normalized()
         requireValid(normalized)
         val now = now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             val existing = templateId?.let {
                 templateDao.findTemplate(it) ?: throw IllegalArgumentException("模板不存在")
             }
@@ -224,8 +243,8 @@ class DefaultGameTemplateRepository @Inject constructor(
     }
 
     override suspend fun deleteTemplate(templateId: String) {
-        database.withTransaction {
-            val template = templateDao.findTemplate(templateId) ?: return@withTransaction
+        database.withDatasetTransaction {
+            val template = templateDao.findTemplate(templateId) ?: return@withDatasetTransaction
             templateDao.clearAccountDefault(templateId)
             templateDao.deleteTasks(templateId)
             templateDao.deleteCategories(templateId)
@@ -240,7 +259,7 @@ class DefaultGameTemplateRepository @Inject constructor(
         val normalized = content.draft.normalized()
         requireValid(normalized)
         val now = now()
-        return database.withTransaction {
+        return database.withDatasetTransaction {
             when (resolution) {
                 TemplateImportResolution.SaveAs -> {
                     val existingNames = templateDao.findAllTemplates().map { it.gameName }

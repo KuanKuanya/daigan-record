@@ -3,6 +3,7 @@ package com.daigan.record.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -101,4 +102,25 @@ class AccountsScreenTest {
         composeTestRule.onNodeWithText("新增").assertExists()
         composeTestRule.onNodeWithText("查看账号").assertExists()
     }
+    @Test
+    fun unfinishedOrderBadgeDisappearsWhenAllOrdersFinish() {
+        val summary = androidx.compose.runtime.mutableStateOf(
+            OwnerSummary(owner(nickname = "小满"), emptyList(), unfinishedOrderCount = 2),
+        )
+        composeTestRule.setContent {
+            DaiganRecordTheme {
+                AccountsScreen(
+                    uiState = OwnersUiState.Success(listOf(summary.value), 0),
+                    onOpenSettings = {}, onOpenOwner = {}, onCreateOwner = {}, onOpenArchived = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithContentDescription("有未完成订单").assertExists()
+        composeTestRule.onNodeWithText("进行中 · 2 单").assertExists()
+        composeTestRule.runOnIdle { summary.value = summary.value.copy(unfinishedOrderCount = 0) }
+        composeTestRule.onNodeWithContentDescription("有未完成订单").assertDoesNotExist()
+        composeTestRule.onNodeWithText("进行中 · 2 单").assertDoesNotExist()
+        composeTestRule.onNodeWithText("小满").assertExists()
+    }
+
 }

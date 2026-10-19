@@ -123,6 +123,27 @@ class OrderDetailViewModel @Inject constructor(
         }
     }
 
+    fun setCalendarCompletion(
+        periodId: String,
+        taskId: String,
+        date: java.time.LocalDate,
+        occurrenceKey: String,
+        completed: Boolean,
+    ) {
+        runWrite {
+            orderRepository.setHistoricalCompletion(
+                orderId = orderId,
+                periodId = periodId,
+                taskId = taskId,
+                date = date,
+                completed = completed,
+                weeklyWindowStart = if (occurrenceKey.startsWith("W:")) {
+                    java.time.LocalDate.parse(occurrenceKey.substringAfter(":"))
+                } else null,
+            )
+        }
+    }
+
     fun toggleOccurrence(taskId: String, occurrenceKey: String, completed: Boolean) {
         runWrite {
             orderRepository.setOccurrenceCompleted(taskId, completed, occurrenceKey)

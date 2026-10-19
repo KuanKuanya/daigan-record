@@ -11,6 +11,9 @@ import com.daigan.record.data.local.dao.OccurrenceDao
 import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
 import com.daigan.record.data.local.dao.ReceiptDao
+import com.daigan.record.data.local.dao.ReminderDeliveryDao
+import com.daigan.record.data.local.dao.ReminderSettingsDao
+import com.daigan.record.data.local.dao.AppSettingsDao
 import com.daigan.record.data.local.dao.TaskDao
 import com.daigan.record.data.local.dao.TemplateDao
 import dagger.Module
@@ -64,4 +67,16 @@ object DatabaseModule {
 
     @Provides
     fun provideTemplateDao(database: RecordDatabase): TemplateDao = database.templateDao()
+
+    @Provides
+    fun provideReminderSettingsDao(database: RecordDatabase): ReminderSettingsDao =
+        database.reminderSettingsDao()
+
+    @Provides
+    fun provideAppSettingsDao(database: RecordDatabase): AppSettingsDao =
+        database.appSettingsDao()
+
+    @Provides
+    fun provideReminderDeliveryDao(database: RecordDatabase): ReminderDeliveryDao =
+        database.reminderDeliveryDao()
 }

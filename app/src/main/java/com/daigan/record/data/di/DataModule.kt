@@ -24,6 +24,14 @@ import com.daigan.record.data.template.AssetBuiltInTemplateSource
 import com.daigan.record.data.template.BuiltInTemplateSource
 import com.daigan.record.data.template.ContentResolverTemplateFileRepository
 import com.daigan.record.data.template.TemplateFileRepository
+import com.daigan.record.backup.BackupDocumentStore
+import com.daigan.record.backup.ContentResolverBackupDocumentStore
+import com.daigan.record.notifications.AndroidReminderNotifier
+import com.daigan.record.notifications.DefaultReminderSettingsRepository
+import com.daigan.record.notifications.ReminderNotifier
+import com.daigan.record.notifications.ReminderScheduler
+import com.daigan.record.notifications.ReminderSettingsRepository
+import com.daigan.record.notifications.WorkManagerReminderScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -85,4 +93,22 @@ interface DataModule {
     @Singleton
     @Binds
     fun bindsBuiltInTemplateSource(source: AssetBuiltInTemplateSource): BuiltInTemplateSource
+
+    @Singleton
+    @Binds
+    fun bindsReminderSettingsRepository(
+        repository: DefaultReminderSettingsRepository,
+    ): ReminderSettingsRepository
+
+    @Singleton
+    @Binds
+    fun bindsReminderScheduler(scheduler: WorkManagerReminderScheduler): ReminderScheduler
+
+    @Singleton
+    @Binds
+    fun bindsReminderNotifier(notifier: AndroidReminderNotifier): ReminderNotifier
+
+    @Singleton
+    @Binds
+    fun bindsBackupDocumentStore(store: ContentResolverBackupDocumentStore): BackupDocumentStore
 }

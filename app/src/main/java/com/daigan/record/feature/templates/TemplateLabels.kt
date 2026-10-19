@@ -42,14 +42,10 @@ fun weekdayLabel(day: DayOfWeek): String = "星期${weekdayShortLabel(day)}"
 fun timeText(time: LocalTime): String = "%02d:%02d".format(time.hour, time.minute)
 
 fun refreshSummary(template: GameTemplateSummary): String =
-    "${template.refresh.zoneId.id} · 每日 ${timeText(template.refresh.dailyRefresh)} 刷新 · " +
-        "每周${weekdayLabel(template.refresh.weeklyRefreshDay)} " +
-        "${timeText(template.refresh.weeklyRefreshTime)} 刷新"
+    "${template.refresh.zoneId.id} · 每日 ${timeText(template.refresh.dailyRefresh)} 刷新"
 
 fun refreshSummary(template: GameTemplate): String =
-    "${template.refresh.zoneId.id} · 每日 ${timeText(template.refresh.dailyRefresh)} 刷新 · " +
-        "每周${weekdayLabel(template.refresh.weeklyRefreshDay)} " +
-        "${timeText(template.refresh.weeklyRefreshTime)} 刷新"
+    "${template.refresh.zoneId.id} · 每日 ${timeText(template.refresh.dailyRefresh)} 刷新"
 
 fun taskCountSummary(template: GameTemplateSummary): String =
     "${template.categoryCount} 个分类 · ${template.taskCount} 个任务 " +

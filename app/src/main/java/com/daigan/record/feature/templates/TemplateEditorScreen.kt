@@ -170,9 +170,7 @@ internal fun TemplateEditorContent(
                                 label = { Text("游戏名称") },
                                 singleLine = true,
                                 isError = errors.containsKey("gameName"),
-                                supportingText = {
-                                    Text(errors["gameName"] ?: "用于模板列表与新建订单时的识别")
-                                },
+                                supportingText = { errors["gameName"]?.let { Text(it) } },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("template-game-name"),
@@ -185,9 +183,7 @@ internal fun TemplateEditorContent(
                                 label = { Text("模板版本") },
                                 singleLine = true,
                                 isError = errors.containsKey("templateVersion"),
-                                supportingText = {
-                                    Text(errors["templateVersion"] ?: "例如 2026.10，由你自行维护")
-                                },
+                                supportingText = { errors["templateVersion"]?.let { Text(it) } },
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             OutlinedTextField(
@@ -198,9 +194,7 @@ internal fun TemplateEditorContent(
                                 label = { Text("游戏版本备注（选填）") },
                                 minLines = 2,
                                 isError = errors.containsKey("gameVersionNotes"),
-                                supportingText = {
-                                    Text(errors["gameVersionNotes"] ?: "记录适用版本或未核实的说明")
-                                },
+                                supportingText = { errors["gameVersionNotes"]?.let { Text(it) } },
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -214,63 +208,17 @@ internal fun TemplateEditorContent(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text("刷新规则", style = MaterialTheme.typography.titleMedium)
-                            OutlinedTextField(
+                            com.daigan.record.ui.components.TimeZoneSelector(
                                 value = draft.zoneText,
-                                onValueChange = { value -> onDraftChange { it.copy(zoneText = value) } },
-                                label = { Text("游戏时区") },
-                                singleLine = true,
-                                isError = errors.containsKey("zone"),
-                                supportingText = {
-                                    Text(errors["zone"] ?: "IANA 时区，例如 Asia/Shanghai")
-                                },
-                                modifier = Modifier.fillMaxWidth(),
+                                onValue = { value -> onDraftChange { it.copy(zoneText = value) } },
+                                error = errors["zone"],
                             )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            ) {
-                                listOf("Asia/Shanghai", "Asia/Tokyo", "UTC").forEach { zone ->
-                                    AssistChip(
-                                        onClick = { onDraftChange { it.copy(zoneText = zone) } },
-                                        label = { Text(zone) },
-                                    )
-                                }
-                            }
                             TemplateTimeField(
                                 label = "每日刷新时间",
                                 time = draft.dailyRefresh,
                                 onTime = { time -> onDraftChange { it.copy(dailyRefresh = time) } },
                             )
-                            Text(
-                                text = "每日任务按该时间划分游戏日，不使用手机零点。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text("每周刷新日", style = MaterialTheme.typography.labelLarge)
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            ) {
-                                DayOfWeek.entries.forEach { day ->
-                                    FilterChip(
-                                        selected = draft.weeklyRefreshDay == day,
-                                        onClick = {
-                                            onDraftChange { it.copy(weeklyRefreshDay = day) }
-                                        },
-                                        label = { Text(weekdayLabel(day)) },
-                                    )
-                                }
-                            }
-                            TemplateTimeField(
-                                label = "每周刷新时间",
-                                time = draft.weeklyRefreshTime,
-                                onTime = { time -> onDraftChange { it.copy(weeklyRefreshTime = time) } },
-                            )
-                            Text(
-                                text = "每周任务在一个刷新周期内只生成一次。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+
                         }
                     }
                 }
@@ -304,13 +252,6 @@ internal fun TemplateEditorContent(
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    Text(
-                        text = "一次性任务只能用于短期单；托管订单只会使用每日、每周、指定星期或" +
-                            "每隔若干天的任务。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
                 }
 
                 draft.categories.forEachIndexed { categoryIndex, category ->

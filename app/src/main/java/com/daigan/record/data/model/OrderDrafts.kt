@@ -71,6 +71,8 @@ data class ShortOrderDraft(
     val notes: String = "",
     val tasks: List<TaskDraft> = listOf(TaskDraft()),
     val initialPayment: InitialPaymentDraft? = null,
+    /** Null retains pre-calendar command semantics for legacy retries. */
+    val refresh: GameRefreshRules? = null,
     /** Template the creation defaults came from; descriptive, never a live reference. */
     val sourceTemplate: OrderTemplateProvenance? = null,
     /**

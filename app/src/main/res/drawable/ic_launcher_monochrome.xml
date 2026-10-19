@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original cat-ear task notebook; approved sage/cream design. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.9" android:scaleY="0.9">
+    <path android:fillColor="#00000000" android:pathData="M39,36 H73 Q81,36 81,44 V75 Q81,82 74,82 H39 Z" android:strokeColor="#000000" android:strokeWidth="3.4" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:fillColor="#00000000" android:pathData="M29,40 Q29,36 32,34 L35,23 Q36,20 39,22 L48,29 H60 L68,22 Q71,20 73,24 L76,35 Q77,37 77,41 V75 Q77,82 70,82 H36 Q29,82 29,75 Z" android:strokeColor="#000000" android:strokeWidth="3.8" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:fillColor="#00000000" android:pathData="M26,40 H33 A2.4,2.4 0,0 1,33,44 H26 A2.4,2.4 0,0 1,26,40 Z" android:strokeColor="#000000" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:fillColor="#00000000" android:pathData="M26,54 H33 A2.4,2.4 0,0 1,33,58 H26 A2.4,2.4 0,0 1,26,54 Z" android:strokeColor="#000000" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:fillColor="#00000000" android:pathData="M26,68 H33 A2.4,2.4 0,0 1,33,72 H26 A2.4,2.4 0,0 1,26,68 Z" android:strokeColor="#000000" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:fillColor="#00000000" android:pathData="M43,58 L51,66 L66,50" android:strokeColor="#000000" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+</vector>

@@ -129,7 +129,7 @@ internal fun TodayScreen(
         ) {
             PageHeader(
                 title = "今日事项",
-                subtitle = "${uiState.dateLabel} · 按各订单设置的刷新时间",
+                subtitle = uiState.dateLabel,
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "设置")
@@ -205,8 +205,7 @@ private fun HostingList(
             item {
                 EmptyStateCard(
                     title = "还没有托管打卡",
-                    description = "在“账号信息”中进入具体游戏账号，点击“为这个账号接新单”创建长期托管。" +
-                        "没有全局建单入口，也不会显示示例任务。",
+                    description = "暂时没有托管打卡。",
                 )
             }
         } else {
@@ -224,13 +223,7 @@ private fun HostingList(
                     }
                 }
             }
-            item {
-                Text(
-                    text = "批量完成只处理当前应做的任务，不会补写历史遗漏；单项可随时取消完成。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+
 
             uiState.activeHosting.forEach { order ->
                 item(key = "hosting-${order.order.id}") {
@@ -292,13 +285,15 @@ private fun HostingOrderCard(
     onUpdateProgress: (String, String, String) -> Unit,
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(order.order.title, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "${order.ownerNickname} · ${order.ownerNumber} / " +
-                            "${order.gameName} · ${order.server}",
+                        text = "${order.ownerNickname} · ${order.ownerNumber}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -315,20 +310,18 @@ private fun HostingOrderCard(
                     },
                 )
             }
-            Text(
-                text = "第 ${order.period.periodIndex + 1} 期 · " +
-                    "${formatGameDate(order.period.startDate)} – " +
-                    "${formatGameDate(order.period.endDate)} · " +
-                    "${Money.formatCents(order.period.priceCents)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                text = "游戏日 ${formatGameDate(order.today)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "${order.gameName} · ${order.server}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "${formatGameDate(order.period.startDate)} — ${formatGameDate(order.period.endDate)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             when (order.status) {
                 HostingStatus.EXPIRED -> Text(
@@ -434,17 +427,10 @@ private fun ShortList(
             item {
                 EmptyStateCard(
                     title = "还没有短期任务",
-                    description = "短期订单只能在具体游戏账号下创建。逾期优先，其次按截止时间排序，无期限最后。",
+                    description = "暂时没有短期任务。",
                 )
             }
         } else {
-            item {
-                Text(
-                    text = "逾期优先 · 按截止时间排序 · 无期限最后",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             uiState.shortOrders.forEach { order ->
                 item(key = "short-${order.order.id}") {
                     ShortOrderCard(
@@ -467,13 +453,15 @@ private fun ShortOrderCard(
     onUpdateProgress: (String, String) -> Unit,
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(order.order.title, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "${order.ownerNickname} · ${order.ownerNumber} / " +
-                            "${order.gameName} · ${order.server}",
+                        text = "${order.ownerNickname} · ${order.ownerNumber}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

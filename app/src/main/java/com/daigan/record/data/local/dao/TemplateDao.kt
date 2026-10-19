@@ -50,6 +50,16 @@ interface TemplateDao {
     )
     suspend fun findTasks(templateId: String): List<TemplateTaskEntity>
 
+    /** Typed full reads used by backup validation (they run every converter). */
+    @Query("SELECT * FROM template_categories")
+    suspend fun findAllCategories(): List<TemplateCategoryEntity>
+
+    @Query("SELECT * FROM template_tasks")
+    suspend fun findAllTemplateTasks(): List<TemplateTaskEntity>
+
+    @Query("SELECT * FROM template_seed_state")
+    suspend fun findAllSeedStates(): List<TemplateSeedStateEntity>
+
     @Query("SELECT id FROM template_categories")
     suspend fun allCategoryIds(): List<String>
 
@@ -79,6 +89,9 @@ interface TemplateDao {
 
     @Query("DELETE FROM game_templates WHERE id = :templateId")
     suspend fun deleteTemplate(templateId: String)
+
+    @Query("SELECT * FROM game_templates WHERE builtInKey IN (:keys)")
+    suspend fun findTemplatesByBuiltInKeys(keys: List<String>): List<GameTemplateEntity>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSeedState(state: TemplateSeedStateEntity)

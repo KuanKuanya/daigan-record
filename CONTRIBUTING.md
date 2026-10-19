@@ -1,33 +1,16 @@
-# How to become a contributor and submit your own code
+# 参与开发
 
-## Contributor License Agreements
+本项目基于 Kotlin、Jetpack Compose、Room 和 Hilt，源码遵循仓库中的 [Apache License 2.0](LICENSE)。上游来源及保留声明见 [底座说明](docs/upstream-foundation.md)。
 
-We'd love to accept your sample apps and patches! Before we can take them, we
-have to jump a couple of legal hurdles.
+## 开发环境
 
-Please fill out either the individual or corporate Contributor License Agreement
-(CLA).
+使用 JDK 21、Android SDK 36 和仓库自带的 Gradle Wrapper。将本机 SDK 路径写入未纳入版本控制的 `local.properties`，不要提交绝对路径、签名密钥或真实账号资料。
 
-  * If you are an individual writing original source code and you're sure you
-    own the intellectual property, then you'll need to sign an [individual CLA](https://developers.google.com/open-source/cla/individual).
-  * If you work for a company that wants to allow you to contribute your work,
-    then you'll need to sign a [corporate CLA](https://developers.google.com/open-source/cla/corporate).
+## 提交改动
 
-Follow either of the two links above to access the appropriate CLA and
-instructions for how to sign and return it. Once we receive it, we'll be able to
-accept your pull requests.
+1. 围绕一个明确问题修改，保留历史数据库 schema 和迁移兼容性。
+2. 影响业务逻辑时添加或调整有意义的回归测试。
+3. 执行 `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`；界面、数据库或系统交互改动还须在 Android 设备/模拟器上执行 `:app:connectedDebugAndroidTest`。
+4. 执行 `git diff --check`；说明改动、验证结果和限制。
 
-## Contributing A Patch
-
-1. Submit an issue describing your proposed change to the repo in question.
-1. The repo owner will respond to your issue promptly.
-1. If your proposed change is accepted, and you haven't already done so, sign a
-   Contributor License Agreement (see details above).
-1. Fork the desired repo, develop and test your code changes.
-1. Ensure that your code adheres to the existing style in the sample to which
-   you are contributing. Refer to the
-   [AOSP Java Code Style for Contributors](https://source.android.com/setup/contribute/code-style) for the
-   recommended coding standards for this organization.
-1. Ensure that your code has an appropriate set of unit tests which all pass.
-1. Submit a pull request.
-
+APK、原始测试日志、构建缓存和本机配置不提交到源码仓库。发布流程和版本规则见 [beta 发布说明](docs/beta-release.md)。

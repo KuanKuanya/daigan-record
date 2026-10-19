@@ -38,10 +38,10 @@ class DefaultReceiptRepository @Inject constructor(
         snapshotSource.observe().map { snapshot -> buildHistory(snapshot) }
 
     override suspend fun recordPayment(request: PaymentRequest): PaymentResult =
-        database.withTransaction { ledger.record(request) }
+        DatasetGate.withWrite { database.withDatasetTransaction { ledger.record(request) } }
 
     override suspend fun correctReceipt(request: ReceiptCorrectionRequest): CorrectionResult =
-        database.withTransaction { ledger.correct(request) }
+        DatasetGate.withWrite { database.withDatasetTransaction { ledger.correct(request) } }
 
     private fun buildHistory(snapshot: LedgerSnapshot): List<ReceiptHistoryEntry> {
         val ordersById = snapshot.orders.associateBy { it.id }

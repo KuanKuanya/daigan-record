@@ -492,12 +492,6 @@ private fun AccountCard(
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Text(text = "为这个账号接新单", modifier = Modifier.padding(start = 6.dp))
                     }
-                    Text(
-                        text = "接单入口属于这个账号；同一账号可以同时有长期托管与短期订单。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

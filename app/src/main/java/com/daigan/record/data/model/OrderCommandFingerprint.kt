@@ -35,6 +35,13 @@ object OrderCommandFingerprint {
         common(draft.ownerId, draft.accountId, draft.title, draft.priceYuan, draft.paymentMode)
         token("notes", normalizedText(draft.notes))
         token("deadline", draft.deadlineDate?.toString())
+        // Omit entirely for legacy commands, preserving their persisted fingerprints.
+        draft.refresh?.let { refresh ->
+            token("zone", refresh.zoneId.id)
+            token("daily", refresh.dailyRefresh.toString())
+            token("weeklyDay", refresh.weeklyRefreshDay.name)
+            token("weeklyTime", refresh.weeklyRefreshTime.toString())
+        }
         tasks(draft.tasks)
         initialPayment(draft.initialPayment)
     }

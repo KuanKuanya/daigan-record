@@ -21,6 +21,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.navArgument
 import com.daigan.record.feature.accounts.AccountFormScreen
 import com.daigan.record.feature.accounts.AccountsScreen
@@ -30,8 +31,9 @@ import com.daigan.record.feature.accounts.OwnerFormScreen
 import com.daigan.record.feature.orders.BackfillScreen
 import com.daigan.record.feature.orders.NewOrderScreen
 import com.daigan.record.feature.orders.OrderDetailScreen
-import com.daigan.record.feature.settings.PendingFeatureScreen
+import com.daigan.record.feature.settings.BackupScreen
 import com.daigan.record.feature.settings.ReceiptHistoryScreen
+import com.daigan.record.feature.settings.ReminderSettingsScreen
 import com.daigan.record.feature.settings.SettingsScreen
 import com.daigan.record.feature.stats.StatsScreen
 import com.daigan.record.feature.templates.TemplateEditorScreen
@@ -51,10 +53,36 @@ private val mainDestinations = listOf(
 )
 
 @Composable
-fun DaiganRecordApp(navController: NavHostController = rememberNavController()) {
+fun DaiganRecordApp(
+    navController: NavHostController = rememberNavController(),
+    initialOrderId: String? = null,
+    homeRequest: Long = 0L,
+    onInitialOrderHandled: () -> Unit = {},
+) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in Routes.mainDestinations
+
+    // A notification tap opens the order it refers to, including after process death.
+    // The screen validates that the order still exists, so a restored-away or deleted
+    // order shows a clear not-found state instead of stale content.
+    LaunchedEffect(initialOrderId) {
+        if (!initialOrderId.isNullOrBlank()) {
+            navController.navigate(Routes.orderDetail(initialOrderId)) {
+                launchSingleTop = true
+            }
+            onInitialOrderHandled()
+        }
+    }
+
+    LaunchedEffect(homeRequest) {
+        if (homeRequest > 0L) {
+            navController.navigate(Routes.TODAY) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -104,7 +132,8 @@ fun DaiganRecordApp(navController: NavHostController = rememberNavController()) 
                         when (section) {
                             SettingsSection.RECEIPTS -> navController.navigate(Routes.RECEIPTS)
                             SettingsSection.TEMPLATES -> navController.navigate(Routes.TEMPLATES)
-                            else -> navController.navigate(Routes.settingsSection(section))
+                            SettingsSection.REMINDERS -> navController.navigate(Routes.REMINDERS)
+                            SettingsSection.BACKUP -> navController.navigate(Routes.BACKUP)
                         }
                     },
                 )
@@ -133,15 +162,22 @@ fun DaiganRecordApp(navController: NavHostController = rememberNavController()) 
             ) {
                 TemplateEditorScreen(onDone = { navController.popBackStack() })
             }
-            composable(
-                route = Routes.SETTINGS_PLACEHOLDER,
-                arguments = listOf(navArgument(Routes.SECTION_ARG) { type = NavType.StringType }),
-            ) { entry ->
-                val section = SettingsSection.fromKey(entry.arguments?.getString(Routes.SECTION_ARG))
-                PendingFeatureScreen(
-                    title = section?.title ?: "设置",
-                    message = section?.pendingMessage ?: "该设置项尚未实现。",
+            composable(Routes.REMINDERS) {
+                ReminderSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BACKUP) {
+                BackupScreen(
                     onBack = { navController.popBackStack() },
+                    onRestoreFinished = {
+                        // The dataset was replaced: discard the whole settings stack and
+                        // return to the start destination so no screen keeps stale data.
+                        navController.navigate(Routes.TODAY) {
+                            popUpTo(navController.graph.id) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(Routes.ARCHIVED) {

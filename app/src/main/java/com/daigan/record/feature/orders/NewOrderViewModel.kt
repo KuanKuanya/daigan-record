@@ -149,6 +149,17 @@ class NewOrderViewModel @Inject constructor(
      */
     private var lastAppliedTasks: List<TaskDraft>? = null
     private var restoredPendingCommand = false
+    private var explicitShortCalendar = true
+    private var templateIntent = 0L
+
+    /** Every newer form decision invalidates older asynchronous default reads. */
+    private fun invalidateTemplateReads() {
+        templateIntent++
+    }
+
+    private fun canApplyTemplate(intent: Long, type: OrderType): Boolean =
+        intent == templateIntent && _uiState.value.type == type &&
+            !_uiState.value.saving && !_uiState.value.isCreated
 
     init {
         restorePendingCommand()
@@ -175,7 +186,7 @@ class NewOrderViewModel @Inject constructor(
                     templates = templates,
                 )
             }
-            if (error == null && !restoredPendingCommand && !_uiState.value.isCreated) {
+            if (error == null && templateIntent == 0L && !restoredPendingCommand && !_uiState.value.isCreated) {
                 applyAccountDefaultTemplate(account?.defaultTemplateId, templates)
             }
         }
@@ -191,9 +202,12 @@ class NewOrderViewModel @Inject constructor(
         templates: List<GameTemplateSummary>,
     ) {
         if (templateId == null || templates.none { it.id == templateId }) return
+        val intent = templateIntent
+        val type = _uiState.value.type
         val template = runCatching { templateRepository.findTemplate(templateId) }.getOrNull()
             ?: return
-        applyTemplateDefaults(template, _uiState.value.type)
+        if (!canApplyTemplate(intent, type)) return
+        applyTemplateDefaults(template, type)
         _uiState.update {
             it.copy(
                 templateNotice = "已按账号默认模板填入「${template.gameName} · " +
@@ -216,6 +230,7 @@ class NewOrderViewModel @Inject constructor(
         savedStateHandle[KEY_CREATION_OPERATION] = restored.creationOperationId
         savedStateHandle[KEY_INITIAL_PAYMENT_OPERATION] = restored.initialPaymentOperationId
         val form = restored.form
+        explicitShortCalendar = form.explicitShortCalendar
         _uiState.update { current ->
             current.copy(
                 type = if (form.isShort) OrderType.SHORT_TASK else OrderType.HOSTING,
@@ -263,7 +278,10 @@ class NewOrderViewModel @Inject constructor(
 
     fun selectType(type: OrderType) {
         val previous = _uiState.value
-        if (previous.type == type) return
+        if (previous.type == type || previous.saving || previous.isCreated) return
+        invalidateTemplateReads()
+        explicitShortCalendar = true
+        val intent = templateIntent
         // Re-derive the template defaults only while the task list is still exactly what
         // the template produced. Edited tasks are the user's work and are never replaced.
         val mayReapply = previous.selectedTemplateId != null &&
@@ -289,7 +307,7 @@ class NewOrderViewModel @Inject constructor(
                 val template = runCatching { templateRepository.findTemplate(templateId) }
                     .getOrNull()
                     ?: return@launch
-                applyTemplateDefaults(template, type)
+                if (canApplyTemplate(intent, type)) applyTemplateDefaults(template, type)
             }
         } else if (previous.selectedTemplateId != null) {
             _uiState.update {
@@ -307,18 +325,24 @@ class NewOrderViewModel @Inject constructor(
     fun applyTemplate(templateId: String) {
         val state = _uiState.value
         if (state.isCreated || state.saving) return
+        invalidateTemplateReads()
+        val intent = templateIntent
+        val type = state.type
         viewModelScope.launch {
             val template = runCatching { templateRepository.findTemplate(templateId) }.getOrNull()
+            if (!canApplyTemplate(intent, type)) return@launch
             if (template == null) {
                 _uiState.update { it.copy(templateNotice = "模板不存在，可能已被删除") }
                 return@launch
             }
-            applyTemplateDefaults(template, _uiState.value.type)
+            applyTemplateDefaults(template, type)
         }
     }
 
     /** Drops the template label and notice; the current tasks stay as editable drafts. */
     fun clearTemplate() {
+        if (_uiState.value.saving || _uiState.value.isCreated) return
+        invalidateTemplateReads()
         lastAppliedTasks = null
         _uiState.update {
             it.copy(
@@ -334,7 +358,7 @@ class NewOrderViewModel @Inject constructor(
         template: GameTemplate,
         type: OrderType,
     ) {
-        if (_uiState.value.isCreated) return
+        if (_uiState.value.isCreated || _uiState.value.saving) return
         val kind = if (type == OrderType.SHORT_TASK) {
             TemplateOrderKind.SHORT_TASK
         } else {
@@ -355,6 +379,7 @@ class NewOrderViewModel @Inject constructor(
             }
             return
         }
+        explicitShortCalendar = true
         val tasks = applicable.map { it.toTaskDraft() }
         lastAppliedTasks = tasks
         _uiState.update {
@@ -436,21 +461,46 @@ class NewOrderViewModel @Inject constructor(
         }
     }
 
-    fun setZoneText(value: String) = _uiState.update { it.copy(zoneText = value) }
+    fun setZoneText(value: String) {
+        invalidateTemplateReads()
+        explicitShortCalendar = true
+        _uiState.update { it.copy(zoneText = value) }
+    }
 
-    fun setDailyRefresh(time: LocalTime) = _uiState.update { it.copy(dailyRefresh = time) }
+    fun setDailyRefresh(time: LocalTime) {
+        invalidateTemplateReads()
+        explicitShortCalendar = true
+        _uiState.update { it.copy(dailyRefresh = time) }
+    }
 
-    fun setWeeklyRefreshDay(day: DayOfWeek) = _uiState.update { it.copy(weeklyRefreshDay = day) }
+    fun setWeeklyRefreshDay(day: DayOfWeek) {
+        invalidateTemplateReads()
+        explicitShortCalendar = true
+        _uiState.update { it.copy(weeklyRefreshDay = day) }
+    }
 
-    fun setWeeklyRefreshTime(time: LocalTime) = _uiState.update { it.copy(weeklyRefreshTime = time) }
+    fun setWeeklyRefreshTime(time: LocalTime) {
+        invalidateTemplateReads()
+        explicitShortCalendar = true
+        _uiState.update { it.copy(weeklyRefreshTime = time) }
+    }
 
-    fun addTask() = _uiState.update { it.copy(tasks = it.tasks + TaskDraft()) }
+    fun addTask() {
+        invalidateTemplateReads()
+        _uiState.update { it.copy(tasks = it.tasks + TaskDraft()) }
+    }
 
-    fun removeTask(index: Int) = _uiState.update { state ->
-        if (state.tasks.size <= 1) state else state.copy(tasks = state.tasks.filterIndexed { i, _ -> i != index })
+    fun removeTask(index: Int) {
+        invalidateTemplateReads()
+        _uiState.update { state ->
+            if (state.tasks.size <= 1) state else state.copy(
+                tasks = state.tasks.filterIndexed { i, _ -> i != index },
+            )
+        }
     }
 
     fun updateTask(index: Int, transform: (TaskDraft) -> TaskDraft) {
+        invalidateTemplateReads()
         _uiState.update { state ->
             state.copy(
                 tasks = state.tasks.mapIndexed { i, task -> if (i == index) transform(task) else task },
@@ -478,6 +528,7 @@ class NewOrderViewModel @Inject constructor(
             _uiState.update { it.copy(saveError = state.loadError) }
             return
         }
+        invalidateTemplateReads()
         // Gate first: everything below runs synchronously on the main thread.
         _uiState.update { it.copy(saving = true, formErrors = emptyMap(), saveError = null) }
 
@@ -576,6 +627,8 @@ class NewOrderViewModel @Inject constructor(
      */
     fun startNewCreation() {
         if (_uiState.value.saving) return
+        invalidateTemplateReads()
+        explicitShortCalendar = true
         savedStateHandle.remove<String>(KEY_CREATED_ORDER_ID)
         savedStateHandle.remove<Boolean>(KEY_CREATED_NAVIGATION_PENDING)
         savedStateHandle.remove<String>(KEY_PENDING_FINGERPRINT)
@@ -642,6 +695,7 @@ class NewOrderViewModel @Inject constructor(
                 notes = state.notes,
                 tasks = state.tasks,
                 initialPayment = initialPayment,
+                refresh = if (explicitShortCalendar) refresh else null,
                 sourceTemplate = provenance,
                 creationOperationId = creationOperationId,
             )
@@ -701,6 +755,7 @@ class NewOrderViewModel @Inject constructor(
         initialAmountYuan = initialAmountYuan,
         initialChannel = initialChannel,
         initialNote = initialNote,
+        explicitShortCalendar = explicitShortCalendar,
         sourceTemplateId = selectedTemplateId,
         sourceTemplateName = selectedTemplateName,
         sourceTemplateVersion = selectedTemplateVersion,

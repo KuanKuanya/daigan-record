@@ -3,6 +3,9 @@ package com.daigan.record.testdi
 import android.content.Context
 import androidx.room.Room
 import com.daigan.record.data.local.RecordDatabase
+import com.daigan.record.data.local.dao.AppSettingsDao
+import com.daigan.record.data.local.dao.ReminderSettingsDao
+import com.daigan.record.data.local.dao.ReminderDeliveryDao
 import com.daigan.record.data.local.dao.AttachmentDao
 import com.daigan.record.data.local.dao.CompletionBatchDao
 import com.daigan.record.data.local.dao.CreationOperationDao
@@ -69,4 +72,8 @@ object TestDatabaseModule {
 
     @Provides
     fun provideTemplateDao(database: RecordDatabase): TemplateDao = database.templateDao()
+    @Provides fun provideAppSettingsDao(database: RecordDatabase): AppSettingsDao = database.appSettingsDao()
+    @Provides fun provideReminderSettingsDao(database: RecordDatabase): ReminderSettingsDao = database.reminderSettingsDao()
+    @Provides fun provideReminderDeliveryDao(database: RecordDatabase): ReminderDeliveryDao = database.reminderDeliveryDao()
+
 }

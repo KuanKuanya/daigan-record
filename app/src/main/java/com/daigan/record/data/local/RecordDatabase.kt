@@ -18,8 +18,12 @@ import com.daigan.record.data.local.dao.OccurrenceDao
 import com.daigan.record.data.local.dao.OrderDao
 import com.daigan.record.data.local.dao.OwnerDao
 import com.daigan.record.data.local.dao.ReceiptDao
+import com.daigan.record.data.local.dao.ReminderDeliveryDao
+import com.daigan.record.data.local.dao.ReminderSettingsDao
+import com.daigan.record.data.local.dao.AppSettingsDao
 import com.daigan.record.data.local.dao.TaskDao
 import com.daigan.record.data.local.dao.TemplateDao
+import com.daigan.record.data.local.entity.AppSettingsEntity
 import com.daigan.record.data.local.entity.AttachmentEntity
 import com.daigan.record.data.local.entity.CompletionBatchEntity
 import com.daigan.record.data.local.entity.CompletionBatchItemEntity
@@ -32,6 +36,8 @@ import com.daigan.record.data.local.entity.OwnerEntity
 import com.daigan.record.data.local.entity.OwnerNumberSequenceEntity
 import com.daigan.record.data.local.entity.ReceiptCorrectionEntity
 import com.daigan.record.data.local.entity.ReceiptEntity
+import com.daigan.record.data.local.entity.ReminderDeliveryEntity
+import com.daigan.record.data.local.entity.ReminderSettingsEntity
 import com.daigan.record.data.local.entity.TaskDefinitionEntity
 import com.daigan.record.data.local.entity.TaskOccurrenceEntity
 import com.daigan.record.data.local.entity.TemplateCategoryEntity
@@ -54,15 +60,17 @@ import com.daigan.record.data.local.entity.TemplateTaskEntity
  *       Existing orders, periods, tasks, occurrences, receipts, corrections and
  *       creation-operation rows are untouched: legacy rows keep NULL provenance and
  *       no template is invented for them.
+ * 6 -> 7 adds the persisted reminder preferences, the local-only dataset identity used
+ *       by the restore commit point, and the reminder delivery log. Existing rows are
+ *       untouched; reminders stay disabled until the user enables them.
  */
-const val RECORD_DATABASE_VERSION = 6
+const val RECORD_DATABASE_VERSION = 7
 
 /**
  * The single source of truth for business data.
  *
- * Version 6 is Phase 4: a persistent, editable template library plus honest creation
- * provenance. Templates are creation defaults only; orders copy their own task and
- * refresh snapshots and hold no foreign key to a template.
+ * Version 7 is Phase 5: reminder preferences, the restore commit marker/dataset identity
+ * and the reminder delivery log. Business records keep exactly the Phase 1–4 shape.
  */
 @Database(
     entities = [
@@ -83,6 +91,9 @@ const val RECORD_DATABASE_VERSION = 6
         TemplateCategoryEntity::class,
         TemplateTaskEntity::class,
         TemplateSeedStateEntity::class,
+        ReminderSettingsEntity::class,
+        AppSettingsEntity::class,
+        ReminderDeliveryEntity::class,
     ],
     version = RECORD_DATABASE_VERSION,
     exportSchema = true,
@@ -114,6 +125,12 @@ abstract class RecordDatabase : RoomDatabase() {
     abstract fun creationOperationDao(): CreationOperationDao
 
     abstract fun templateDao(): TemplateDao
+
+    abstract fun reminderSettingsDao(): ReminderSettingsDao
+
+    abstract fun appSettingsDao(): AppSettingsDao
+
+    abstract fun reminderDeliveryDao(): ReminderDeliveryDao
 
     companion object {
         const val NAME = "daigan-record.db"
@@ -623,8 +640,59 @@ abstract class RecordDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Phase 5 local state. Only new tables are created; no business row is rewritten
+         * and no reminder is enabled on the user's behalf.
+         */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `reminder_settings` (
+                        `id` INTEGER NOT NULL,
+                        `shortDeadlineEnabled` INTEGER NOT NULL,
+                        `shortDeadlineMinutes` INTEGER NOT NULL,
+                        `hostingExpiryEnabled` INTEGER NOT NULL,
+                        `hostingExpiryMinutes` INTEGER NOT NULL,
+                        `unfinishedTasksEnabled` INTEGER NOT NULL,
+                        `unfinishedTasksMinutes` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `app_settings` (
+                        `id` INTEGER NOT NULL,
+                        `datasetInstanceId` TEXT NOT NULL,
+                        `lastRestoreId` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `reminder_deliveries` (
+                        `category` TEXT NOT NULL,
+                        `day` TEXT NOT NULL,
+                        `deliveredAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`category`, `day`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         /** Every migration the app must run; the list is also used by tests. */
-        val ALL_MIGRATIONS: Array<Migration> =
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+        )
     }
 }

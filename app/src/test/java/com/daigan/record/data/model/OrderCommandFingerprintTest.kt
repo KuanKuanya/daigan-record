@@ -145,4 +145,18 @@ class OrderCommandFingerprintTest {
             ),
         )
     }
+    @Test fun shortCalendarChangesAreDistinctButLegacyFingerprintRemainsStable() {
+        val legacy = short()
+        // Golden canonical hash from the pre-calendar short command format.
+        assertEquals("43090fac24c13be965a90e3ea77751b5eb40dc6c74f2824c726435eddd6ff3b2",
+            OrderCommandFingerprint.short(legacy))
+        val explicit = legacy.copy(refresh = rules)
+        assertNotEquals(OrderCommandFingerprint.short(legacy), OrderCommandFingerprint.short(explicit))
+        assertNotEquals(OrderCommandFingerprint.short(explicit), OrderCommandFingerprint.short(
+            explicit.copy(refresh = rules.copy(dailyRefresh = LocalTime.of(5, 0)))))
+        assertNotEquals(OrderCommandFingerprint.short(explicit), OrderCommandFingerprint.short(
+            explicit.copy(refresh = rules.copy(zoneId = ZoneId.of("UTC")))))
+        assertEquals(OrderCommandFingerprint.short(legacy), OrderCommandFingerprint.short(legacy.copy(refresh = null)))
+    }
+
 }

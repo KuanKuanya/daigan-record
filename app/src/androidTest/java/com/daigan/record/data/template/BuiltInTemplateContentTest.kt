@@ -13,9 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The shipped assets are real product content: they must parse with the public codec,
- * use the requested preparation order, and expose both hosting and short-order tasks.
- * Any unverified detail is labelled in the template notes, not presented as official.
+ * The generic starter asset must parse with the public codec and expose both order kinds.
  */
 @RunWith(AndroidJUnit4::class)
 class BuiltInTemplateContentTest {
@@ -32,7 +30,7 @@ class BuiltInTemplateContentTest {
 
     @Test
     fun everyBuiltInAssetParsesAndHasBothOrderKinds() = runBlocking {
-        val expectedNames = listOf("重返未来：1999", "鸣潮", "通用模板")
+        val expectedNames = listOf("通用模板")
         val actualNames = BuiltInTemplates.ALL.map { content(it).draft.gameName }
         assertEquals(expectedNames, actualNames)
 
@@ -81,23 +79,6 @@ class BuiltInTemplateContentTest {
     }
 
     @Test
-    fun verifiedRefreshTimesAreShippedForTheTwoNamedGames() = runBlocking {
-        val reverse = content(BuiltInTemplates.ALL.first {
-            it.seedKey == BuiltInTemplates.REVERSE_1999_KEY
-        }).draft
-        assertEquals("Asia/Shanghai", reverse.zoneText)
-        assertEquals("05:00", "%02d:%02d".format(reverse.dailyRefresh.hour, reverse.dailyRefresh.minute))
-        assertEquals("05:00", "%02d:%02d".format(reverse.weeklyRefreshTime.hour, reverse.weeklyRefreshTime.minute))
-
-        val wuwa = content(BuiltInTemplates.ALL.first {
-            it.seedKey == BuiltInTemplates.WUTHERING_WAVES_KEY
-        }).draft
-        assertEquals("Asia/Shanghai", wuwa.zoneText)
-        assertEquals("04:00", "%02d:%02d".format(wuwa.dailyRefresh.hour, wuwa.dailyRefresh.minute))
-        assertEquals("04:00", "%02d:%02d".format(wuwa.weeklyRefreshTime.hour, wuwa.weeklyRefreshTime.minute))
-    }
-
-    @Test
     fun assetsContainNoBusinessData() = runBlocking {
         BuiltInTemplates.ALL.forEach { descriptor ->
             val text = String(source.read(descriptor.assetPath), Charsets.UTF_8)
@@ -112,17 +93,14 @@ class BuiltInTemplateContentTest {
     }
 
     @Test
-    fun theExpectedShortTaskTitleIsPresentForEachBuiltIn() = runBlocking {
+    fun theGenericTemplateContainsShortTasks() = runBlocking {
         val titles = BuiltInTemplates.ALL.map { descriptor ->
             content(descriptor).draft.categories
                 .flatMap { it.tasks }
                 .filter { it.recurrence == RecurrenceType.ONE_TIME }
                 .map { it.title }
         }
-        titles.forEach { assertTrue(it.isNotEmpty()) }
-        assertTrue(titles[0].any { it.contains("主线") })
-        assertTrue(titles[1].any { it.contains("主线") })
-        assertTrue(titles[2].any { it.contains("委托") })
+        assertTrue(titles.single().any { it.isNotBlank() })
     }
 
 }

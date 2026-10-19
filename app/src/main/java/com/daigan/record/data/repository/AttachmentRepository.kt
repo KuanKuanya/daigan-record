@@ -65,6 +65,15 @@ class DefaultAttachmentRepository @Inject constructor(
     private val sync: AttachmentSync,
 ) : AttachmentRepository {
 
+    /**
+     * A published screenshot and its database row must not interleave with a dataset
+     * replacement, so the attachment lock is nested inside the dataset write gate.
+     * [AttachmentSync] still serialises publications against each other and against
+     * orphan cleanup.
+     */
+    private suspend fun <T> withExclusivePublished(block: suspend () -> T): T =
+        DatasetGate.withWrite { sync.withExclusive { block() } }
+
     private data class StagedFile(
         val id: String,
         val mimeType: String,
@@ -83,13 +92,13 @@ class DefaultAttachmentRepository @Inject constructor(
         require((taskDefinitionId == null) != (occurrenceId == null)) {
             "截图必须且只能归属到一个任务或一次打卡"
         }
-        return sync.withExclusive {
+        return withExclusivePublished {
             val staged = stage(sourceUri)
             val finalFile = commit(staged)
             val entityId = UUID.randomUUID().toString()
             try {
                 sync.hooks?.afterFinalFilePublished(finalFile.name)
-                database.withTransaction {
+                database.withDatasetTransaction {
                     validateTarget(taskDefinitionId, occurrenceId)
                     val now = timeProvider.now()
                     val entity = AttachmentEntity(
@@ -119,8 +128,8 @@ class DefaultAttachmentRepository @Inject constructor(
     override suspend fun replaceAttachment(
         attachmentId: String,
         sourceUri: Uri,
-    ): Attachment = sync.withExclusive {
-        val old = database.withTransaction {
+    ): Attachment = withExclusivePublished {
+        val old = database.withDatasetTransaction {
             val existing = attachmentDao.findById(attachmentId)
                 ?: throw IllegalArgumentException("截图不存在")
             validateTarget(existing.taskDefinitionId, existing.occurrenceId)
@@ -131,7 +140,7 @@ class DefaultAttachmentRepository @Inject constructor(
         val newId = UUID.randomUUID().toString()
         val replacement = try {
             sync.hooks?.afterFinalFilePublished(finalFile.name)
-            database.withTransaction {
+            database.withDatasetTransaction {
                 val current = attachmentDao.findById(attachmentId)
                     ?: throw IllegalArgumentException("截图不存在")
                 validateTarget(current.taskDefinitionId, current.occurrenceId)
@@ -161,8 +170,8 @@ class DefaultAttachmentRepository @Inject constructor(
         replacement
     }
 
-    override suspend fun deleteAttachment(attachmentId: String) = sync.withExclusive {
-        val path = database.withTransaction {
+    override suspend fun deleteAttachment(attachmentId: String) = withExclusivePublished {
+        val path = database.withDatasetTransaction {
             val existing = attachmentDao.findById(attachmentId)
                 ?: throw IllegalArgumentException("截图不存在")
             validateTarget(existing.taskDefinitionId, existing.occurrenceId)
@@ -183,14 +192,14 @@ class DefaultAttachmentRepository @Inject constructor(
     override suspend fun cleanupOrphans(): Int = withContext(Dispatchers.IO) {
         // The snapshot and every deletion happen under the same lock as publications,
         // so no newly committed file can be missing from the snapshot.
-        sync.withExclusive {
+        withExclusivePublished {
             // The reference snapshot is always read under the lock, before the directory
             // check: a publication either commits before this read (and is protected) or
             // waits for the lock. Reading it after an early return would also make the
             // snapshot invisible to the concurrency barrier when nothing was stored yet.
             val referenced = attachmentDao.findAll().map { it.relativePath }.toSet()
             sync.hooks?.afterReferenceSnapshot(referenced)
-            val directory = attachmentsDirectory().takeIf { it.isDirectory } ?: return@withExclusive 0
+            val directory = attachmentsDirectory().takeIf { it.isDirectory } ?: return@withExclusivePublished 0
             var deleted = 0
             directory.listFiles()?.forEach { file ->
                 val staleTemp = file.name.endsWith(TEMP_SUFFIX) &&

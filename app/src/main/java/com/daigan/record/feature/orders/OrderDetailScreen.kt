@@ -144,6 +144,7 @@ fun OrderDetailScreen(
                 onUpdateShortProgress = viewModel::updateShortProgress,
                 onCompleteShortOrder = viewModel::completeShortOrder,
                 onToggleOccurrence = viewModel::toggleOccurrence,
+                onCalendarCompletion = viewModel::setCalendarCompletion,
                 onUpdateOccurrenceProgress = viewModel::updateOccurrenceProgress,
                 onCompleteHostingOrder = viewModel::completeHostingOrder,
                 onUndo = viewModel::undoLastBatch,
@@ -287,6 +288,7 @@ internal fun OrderDetailContent(
     onVoidReceipt: (Receipt) -> Unit,
     paymentInFlight: Boolean,
     modifier: Modifier = Modifier,
+    onCalendarCompletion: ((String, String, java.time.LocalDate, String, Boolean) -> Unit)? = null,
 ) {
     val canWrite = !detail.owner.archived && !detail.account.archived
     // Money stays writable for archived records: debt must remain collectible without
@@ -302,13 +304,22 @@ internal fun OrderDetailContent(
         LazyColumn(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag("order-detail-list"),
         ) {
             item {
                 OrderSummaryCard(detail = detail)
             }
 
             if (detail.isHosting) {
+                item {
+                    HostingCalendarCard(
+                        detail = detail,
+                        enabled = canWrite,
+                        onToggleOccurrence = onToggleOccurrence,
+                        onUpdateOccurrenceProgress = onUpdateOccurrenceProgress,
+                        onCalendarCompletion = onCalendarCompletion,
+                    )
+                }
                 hostingSections(
                     detail = detail,
                     canWrite = canWrite,
@@ -348,13 +359,6 @@ internal fun OrderDetailContent(
                 )
             }
 
-            item {
-                Text(
-                    text = "订单标识 ${detail.order.id}。该标识在续期后保持不变。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 
@@ -742,7 +746,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.shortSections(
     if (completed.isEmpty()) {
         item {
             Text(
-                text = "还没有已完成的任务。完成与收款互相独立，可以先完成或先收款。",
+                text = "还没有已完成的任务。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -823,11 +827,7 @@ private fun OrderSummaryCard(detail: OrderDetail) {
                         "%02d:%02d".format(
                             period.refresh.dailyRefresh.hour,
                             period.refresh.dailyRefresh.minute,
-                        ) + " · 每周 " + weekdayLabel(period.refresh.weeklyRefreshDay) +
-                        " %02d:%02d".format(
-                            period.refresh.weeklyRefreshTime.hour,
-                            period.refresh.weeklyRefreshTime.minute,
-                        ) + "（本期快照；模板或手动填写，续期后不改写旧期）",
+                        ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp),
@@ -1206,7 +1206,7 @@ private fun ReceiptRow(
 }
 
 @Composable
-private fun NumericEditButton(
+internal fun NumericEditButton(
     initialValue: String,
     enabled: Boolean,
     onValue: (String) -> Unit,

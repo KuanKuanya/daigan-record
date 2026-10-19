@@ -32,8 +32,8 @@ android {
         applicationId = "com.daigan.record"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 6
+        versionName = "1.5"
 
         testInstrumentationRunner = "com.daigan.record.HiltTestRunner"
         vectorDrawables {
@@ -97,6 +97,8 @@ dependencies {
     // Hilt Dependency Injection
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+    // Persistent reminders use a custom WorkerFactory with Hilt-provided dependencies.
+    implementation(libs.androidx.work.runtime)
     // Hilt and instrumented tests.
     androidTestImplementation(libs.hilt.android.testing)
     kaptAndroidTest(libs.hilt.android.compiler)
@@ -139,6 +141,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.work.testing)
     // Espresso 3.5 (pulled in by compose ui-test) crashes on API 36 because of the
     // removed InputManager.getInstance() hidden API; 3.7 fixes that.
     androidTestImplementation(libs.androidx.test.espresso.core)

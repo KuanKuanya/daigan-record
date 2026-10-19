@@ -79,12 +79,14 @@ fun EmptyStateCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.size(6.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (description.isNotBlank()) {
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

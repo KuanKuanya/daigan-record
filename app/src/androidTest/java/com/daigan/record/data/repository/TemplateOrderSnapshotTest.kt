@@ -31,7 +31,7 @@ import org.junit.runner.RunWith
 
 /**
  * Template selection creates real work, and later template changes never rewrite an
- * order's own snapshot. All three built-in templates are exercised for both order types.
+ * order's own snapshot. The shipped generic built-in is exercised for both order types.
  */
 @RunWith(AndroidJUnit4::class)
 class TemplateOrderSnapshotTest {
@@ -54,7 +54,7 @@ class TemplateOrderSnapshotTest {
         env.templateRepository.ensureBuiltInTemplates()
         val (owner, account) = env.seedOwnerAndAccount()
         val summaries = env.templateRepository.findAllSummaries()
-        assertEquals(3, summaries.size)
+        assertEquals(1, summaries.size)
 
         summaries.forEach { summary ->
             val template = env.templateRepository.findTemplate(summary.id)!!

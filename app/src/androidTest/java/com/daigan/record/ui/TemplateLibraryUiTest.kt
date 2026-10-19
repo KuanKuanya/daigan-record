@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import com.daigan.record.testing.awaitApplicationReady
 import com.daigan.record.MainActivity
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -23,7 +24,7 @@ import org.junit.Test
 
 /**
  * The template library and editor are real screens backed by Room. The Hilt test module
- * supplies an in-memory database; the shipped assets seed the three built-ins.
+ * supplies an in-memory database; the shipped asset seeds the generic built-in template.
  */
 @HiltAndroidTest
 class TemplateLibraryUiTest {
@@ -37,24 +38,26 @@ class TemplateLibraryUiTest {
     @Before
     fun setUp() {
         hiltRule.inject()
+        composeTestRule.awaitApplicationReady()
         openLibrary()
     }
 
     @Test
-    fun libraryListsTheThreeBuiltInsWithTheirRefreshRules() {
-        waitForTemplate("重返未来：1999")
-        composeTestRule.onNodeWithText("鸣潮").assertExists()
-        composeTestRule.onNodeWithText("通用模板").assertExists()
+    fun libraryListsOnlyTheGenericBuiltInAndKeepsImportAvailable() {
+        waitForTemplate("通用模板")
+        assertTrue(composeTestRule.onAllNodesWithText("重返未来：1999").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeTestRule.onAllNodesWithText("鸣潮").fetchSemanticsNodes().isEmpty())
+        composeTestRule.onNodeWithTag("template-library-import").assertExists()
         assertTrue(
-            composeTestRule.onAllNodesWithText("内置").fetchSemanticsNodes().size >= 3,
+            composeTestRule.onAllNodesWithText("内置").fetchSemanticsNodes().size == 1,
         )
-        composeTestRule.onNodeWithText("模板只作为新建订单时的默认值", substring = true)
-            .assertExists()
+        assertTrue(composeTestRule.onAllNodesWithText("模板只作为新建订单时的默认值", substring = true)
+            .fetchSemanticsNodes().isEmpty())
     }
 
     @Test
     fun creatingATemplateSavesAndReturnsItToTheLibrary() {
-        waitForTemplate("重返未来：1999")
+        waitForTemplate("通用模板")
         composeTestRule.onNodeWithTag("template-library-new").performClick()
         waitForTag("template-game-name")
 
@@ -81,7 +84,7 @@ class TemplateLibraryUiTest {
 
     @Test
     fun savingAnEmptyTemplateShowsValidationErrors() {
-        waitForTemplate("重返未来：1999")
+        waitForTemplate("通用模板")
         composeTestRule.onNodeWithTag("template-library-new").performClick()
         waitForTag("template-game-name")
         composeTestRule.onNodeWithTag("template-game-name").performTextClearance()
@@ -129,7 +132,7 @@ class TemplateLibraryUiTest {
 
     @Test
     fun cancellationKeepsTheLibraryUnchanged() {
-        waitForTemplate("重返未来：1999")
+        waitForTemplate("通用模板")
         composeTestRule.onNodeWithTag("template-library-new").performClick()
         waitForTag("template-game-name")
         composeTestRule.onNodeWithTag("template-game-name").performTextInput("不会保存")
@@ -144,7 +147,7 @@ class TemplateLibraryUiTest {
         }
         composeTestRule.onNodeWithTag("template-discard-confirm").performClick()
         composeTestRule.waitUntil(5_000) {
-            composeTestRule.onAllNodesWithText("重返未来：1999")
+            composeTestRule.onAllNodesWithText("通用模板")
                 .fetchSemanticsNodes().isNotEmpty()
         }
         assertTrue(

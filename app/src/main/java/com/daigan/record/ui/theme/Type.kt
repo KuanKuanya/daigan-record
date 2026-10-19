@@ -23,25 +23,49 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 val Typography = Typography(
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        lineHeight = 19.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+    ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.15.sp,
     ),
-    // Headlines keep the mockup's compact hierarchy and scale with the user font size.
     headlineSmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
-        fontSize = 24.sp,
-        lineHeight = 32.sp,
+        fontSize = 22.sp,
+        lineHeight = 29.sp,
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
-        lineHeight = 24.sp,
+        lineHeight = 22.sp,
         letterSpacing = 0.15.sp,
+    ),
+    titleSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp,
     ),
 )

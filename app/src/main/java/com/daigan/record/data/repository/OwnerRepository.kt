@@ -108,7 +108,7 @@ class DefaultOwnerRepository @Inject constructor(
         var attempt = 0
         while (true) {
             try {
-                return database.withTransaction {
+                return database.withDatasetTransaction {
                     ownerDao.ensureNumberSequence()
                     // The UPDATE takes the write lock, so two transactions can never
                     // observe the same "next" value.
@@ -139,7 +139,7 @@ class DefaultOwnerRepository @Inject constructor(
         val normalized = nickname.trim()
         OwnerValidation.nicknameError(normalized)?.let { throw IllegalArgumentException(it) }
         val now = timeProvider.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
             ownerDao.updateNickname(ownerId = ownerId, nickname = normalized, updatedAt = now)
         }
@@ -147,11 +147,11 @@ class DefaultOwnerRepository @Inject constructor(
 
     override suspend fun archiveOwner(ownerId: String) {
         val now = timeProvider.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             val owner = ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
             // Idempotent: a second archive must not create a new batch or re-stamp rows,
             // otherwise a later restore would lose the accounts of the original batch.
-            if (owner.archivedAt != null) return@withTransaction
+            if (owner.archivedAt != null) return@withDatasetTransaction
 
             // Do not hide active work behind an archive. Finished short orders and
             // expired periods may be archived; unfinished work must be dealt with first.
@@ -179,10 +179,10 @@ class DefaultOwnerRepository @Inject constructor(
 
     override suspend fun restoreOwner(ownerId: String) {
         val now = timeProvider.now()
-        database.withTransaction {
+        database.withDatasetTransaction {
             val owner = ownerDao.findById(ownerId) ?: throw IllegalArgumentException("老板不存在")
             // Idempotent: restoring an active owner changes nothing.
-            if (owner.archivedAt == null) return@withTransaction
+            if (owner.archivedAt == null) return@withDatasetTransaction
 
             // Read the provenance before the restore clears it.
             val batchId = owner.archiveBatchId

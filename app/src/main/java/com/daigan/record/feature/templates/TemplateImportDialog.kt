@@ -72,9 +72,7 @@ fun TemplateImportDialog(
                     )
                 }
                 Text(
-                    text = "${draft.zoneText} · 每日 ${timeText(draft.dailyRefresh)} 刷新 · " +
-                        "每周${weekdayLabel(draft.weeklyRefreshDay)} " +
-                        "${timeText(draft.weeklyRefreshTime)} 刷新",
+                    text = "${draft.zoneText} · 每日 ${timeText(draft.dailyRefresh)} 刷新",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

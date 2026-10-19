@@ -100,11 +100,11 @@ fun CompletionRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (subtitle != null) {
+            if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,

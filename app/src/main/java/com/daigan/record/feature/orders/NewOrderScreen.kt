@@ -297,10 +297,6 @@ internal fun NewOrderScreen(
                                 onZone = onZone,
                                 dailyRefresh = uiState.dailyRefresh,
                                 onDailyRefresh = onDailyRefresh,
-                                weeklyDay = uiState.weeklyRefreshDay,
-                                onWeeklyDay = onWeeklyDay,
-                                weeklyTime = uiState.weeklyRefreshTime,
-                                onWeeklyTime = onWeeklyTime,
                             )
                         }
                     }
@@ -757,73 +753,18 @@ private fun RefreshRulesEditor(
     onZone: (String) -> Unit,
     dailyRefresh: LocalTime,
     onDailyRefresh: (LocalTime) -> Unit,
-    weeklyDay: DayOfWeek,
-    onWeeklyDay: (DayOfWeek) -> Unit,
-    weeklyTime: LocalTime,
-    onWeeklyTime: (LocalTime) -> Unit,
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            SectionTitle("刷新规则（来自模板或手动填写，可修改）")
-            OutlinedTextField(
-                value = zoneText,
-                onValueChange = onZone,
-                label = { Text("游戏时区") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 8.dp),
-            ) {
-                AssistChip(
-                    onClick = { onZone("Asia/Shanghai") },
-                    label = { Text("Asia/Shanghai") },
-                )
-                AssistChip(
-                    onClick = { onZone("Asia/Tokyo") },
-                    label = { Text("Asia/Tokyo") },
-                )
-            }
+            SectionTitle("刷新时间")
+            com.daigan.record.ui.components.TimeZoneSelector(value = zoneText, onValue = onZone)
             TimeField(
                 label = "每日刷新时间",
                 time = dailyRefresh,
                 onTime = onDailyRefresh,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            Text(
-                text = "每日任务按该时间划分游戏日，不使用手机零点。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "每周刷新星期",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-            ) {
-                DayOfWeek.entries.forEach { day ->
-                    FilterChip(
-                        selected = weeklyDay == day,
-                        onClick = { onWeeklyDay(day) },
-                        label = { Text(dayLabel(day)) },
-                    )
-                }
-            }
-            TimeField(
-                label = "每周刷新时间",
-                time = weeklyTime,
-                onTime = onWeeklyTime,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                text = "每周任务在一个刷新周期内只生成一次；周期不会按每天复制。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
         }
     }
 }
@@ -970,7 +911,7 @@ private fun TaskEditor(
                     }
 
                     RecurrenceType.WEEKLY -> Text(
-                        text = "使用上方每周刷新星期与时间；每个游戏周只出现一次。",
+                        text = "每周一次",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

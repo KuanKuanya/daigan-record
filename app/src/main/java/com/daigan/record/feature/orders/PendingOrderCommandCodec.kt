@@ -37,6 +37,8 @@ internal data class RestoredOrderForm(
     val initialAmountYuan: String,
     val initialChannel: PaymentChannel,
     val initialNote: String,
+    /** Absent/false preserves the legacy short-command fingerprint on restoration. */
+    val explicitShortCalendar: Boolean = false,
     /**
      * Template provenance as it was shown when the command was submitted. Optional and
      * absent in payloads written before Phase 4, so decoding stays backward compatible.
@@ -104,6 +106,7 @@ internal object PendingOrderCommandCodec {
         put("initialAmountYuan", form.initialAmountYuan)
         put("initialChannel", form.initialChannel.name)
         put("initialNote", form.initialNote)
+        put("explicitShortCalendar", form.explicitShortCalendar.toString())
         put("sourceTemplateId", form.sourceTemplateId)
         put("sourceTemplateName", form.sourceTemplateName)
         put("sourceTemplateVersion", form.sourceTemplateVersion)
@@ -124,6 +127,7 @@ internal object PendingOrderCommandCodec {
         check(values["version"] == VERSION) { "unsupported version" }
         fun text(key: String): String = decodeText(checkNotNull(values[key]) { "missing $key" })
         fun optional(key: String): String? = text(key).takeIf { it.isNotEmpty() }
+        fun addedOptional(key: String): String? = values[key]?.let(::decodeText)?.takeIf { it.isNotEmpty() }
         val taskCount = text("taskCount").toInt()
         val tasks = (0 until taskCount).map { index ->
             val fields = text("task.$index").split(FIELD_SEPARATOR)
@@ -163,9 +167,10 @@ internal object PendingOrderCommandCodec {
                 initialChannel = PaymentChannel.valueOf(text("initialChannel")),
                 initialNote = text("initialNote"),
                 // Optional keys: a v1 payload written before Phase 4 simply has none.
-                sourceTemplateId = optional("sourceTemplateId"),
-                sourceTemplateName = optional("sourceTemplateName"),
-                sourceTemplateVersion = optional("sourceTemplateVersion"),
+                explicitShortCalendar = addedOptional("explicitShortCalendar")?.toBooleanStrict() ?: false,
+                sourceTemplateId = addedOptional("sourceTemplateId"),
+                sourceTemplateName = addedOptional("sourceTemplateName"),
+                sourceTemplateVersion = addedOptional("sourceTemplateVersion"),
             ),
             creationOperationId = text("creationOperationId"),
             initialPaymentOperationId = text("initialPaymentOperationId"),
