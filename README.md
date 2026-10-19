@@ -11,7 +11,7 @@
 
 **代肝记录**是一款为个人游戏代肝接单者制作的 Android 记录工具。把老板和账号建好，再把托管、短期任务和收款记进去，就可以从「今日事项」「账号信息」「数据统计」三个入口查看。
 
-游戏操作由使用者自行完成，应用负责记录任务、服务进度和账目。目前正在准备面向公众的 Beta 测试，欢迎带着实际使用场景来提问题和建议。
+游戏操作由使用者自行完成，应用负责记录任务、服务进度和账目。目前已开放 v1.5 Beta 下载测试。
 
 ## 先看看实际界面
 
@@ -49,7 +49,8 @@
 
 - 系统要求：Android 8.0 / API 26 及以上。目前提供 Android 版本。
 - 下载位置：本仓库的 **[Releases](https://github.com/undefinedfrancis/daigan-record/releases)** 页面，选择最新 Beta，在 **Assets** 中下载 `.apk` 文件；`Source code` 是源码压缩包。
-- 发布状态：当前测试基线为 v1.5，公开下载入口将在发布 Beta Release 后开放；若暂时没有 APK，请等待上架。
+- 当前版本：**[v1.5 Beta 1](https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.5-beta.1)**，已开放下载。
+- **[直接下载 Android 安装包（APK）](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.5-beta.1/daigan-record-v1.5-debug.apk)** · [SHA-256 校验文件](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.5-beta.1/SHA256SUMS)
 - 安装：在手机上打开 APK，按系统提示允许该下载来源安装应用。升级前先在应用内备份资料，尽量使用同一发布渠道的安装包覆盖升级。
 
 当前安装包使用调试签名。后续若调整分发签名，会在 Release 说明中告知安装和迁移方式。
