@@ -36,3 +36,6 @@ local.properties
 .env
 .env.*
 !.env.example
+
+# Local release signing configuration (never commit)
+keystore.properties

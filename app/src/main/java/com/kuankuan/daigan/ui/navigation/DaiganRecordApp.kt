@@ -1,0 +1,278 @@
+package com.kuankuan.daigan.ui.navigation
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.LaunchedEffect
+import androidx.navigation.navArgument
+import com.kuankuan.daigan.feature.accounts.AccountFormScreen
+import com.kuankuan.daigan.feature.accounts.AccountsScreen
+import com.kuankuan.daigan.feature.accounts.ArchivedRecordsScreen
+import com.kuankuan.daigan.feature.accounts.OwnerDetailScreen
+import com.kuankuan.daigan.feature.accounts.OwnerFormScreen
+import com.kuankuan.daigan.feature.orders.BackfillScreen
+import com.kuankuan.daigan.feature.orders.NewOrderScreen
+import com.kuankuan.daigan.feature.orders.OrderDetailScreen
+import com.kuankuan.daigan.feature.settings.BackupScreen
+import com.kuankuan.daigan.feature.settings.ReceiptHistoryScreen
+import com.kuankuan.daigan.feature.settings.ReminderSettingsScreen
+import com.kuankuan.daigan.feature.settings.SettingsScreen
+import com.kuankuan.daigan.feature.stats.StatsScreen
+import com.kuankuan.daigan.feature.templates.TemplateEditorScreen
+import com.kuankuan.daigan.feature.templates.TemplateLibraryScreen
+import com.kuankuan.daigan.feature.today.TodayScreen
+
+private data class MainDestination(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+)
+
+private val mainDestinations = listOf(
+    MainDestination(Routes.TODAY, "今日事项", Icons.AutoMirrored.Filled.List),
+    MainDestination(Routes.ACCOUNTS, "账号信息", Icons.Filled.Person),
+    MainDestination(Routes.STATS, "数据统计", Icons.Filled.BarChart),
+)
+
+@Composable
+fun DaiganRecordApp(
+    navController: NavHostController = rememberNavController(),
+    initialOrderId: String? = null,
+    homeRequest: Long = 0L,
+    onInitialOrderHandled: () -> Unit = {},
+) {
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val showBottomBar = currentRoute in Routes.mainDestinations
+
+    // A notification tap opens the order it refers to, including after process death.
+    // The screen validates that the order still exists, so a restored-away or deleted
+    // order shows a clear not-found state instead of stale content.
+    LaunchedEffect(initialOrderId) {
+        if (!initialOrderId.isNullOrBlank()) {
+            navController.navigate(Routes.orderDetail(initialOrderId)) {
+                launchSingleTop = true
+            }
+            onInitialOrderHandled()
+        }
+    }
+
+    LaunchedEffect(homeRequest) {
+        if (homeRequest > 0L) {
+            navController.navigate(Routes.TODAY) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    Scaffold(
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar {
+                    mainDestinations.forEach { destination ->
+                        NavigationBarItem(
+                            selected = currentRoute == destination.route,
+                            onClick = { navController.navigateToMain(destination.route) },
+                            icon = { Icon(destination.icon, contentDescription = destination.label) },
+                            label = { Text(destination.label) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Routes.TODAY,
+            modifier = Modifier.padding(innerPadding),
+        ) {
+            composable(Routes.TODAY) {
+                TodayScreen(
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                )
+            }
+            composable(Routes.ACCOUNTS) {
+                AccountsScreen(
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenOwner = { ownerId -> navController.navigate(Routes.ownerDetail(ownerId)) },
+                    onCreateOwner = { navController.navigate(Routes.ownerForm()) },
+                    onOpenArchived = { navController.navigate(Routes.ARCHIVED) },
+                )
+            }
+            composable(Routes.STATS) {
+                StatsScreen(
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                )
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenSection = { section ->
+                        when (section) {
+                            SettingsSection.RECEIPTS -> navController.navigate(Routes.RECEIPTS)
+                            SettingsSection.TEMPLATES -> navController.navigate(Routes.TEMPLATES)
+                            SettingsSection.REMINDERS -> navController.navigate(Routes.REMINDERS)
+                            SettingsSection.BACKUP -> navController.navigate(Routes.BACKUP)
+                        }
+                    },
+                )
+            }
+            composable(Routes.RECEIPTS) {
+                ReceiptHistoryScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.TEMPLATES) {
+                TemplateLibraryScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreateTemplate = { navController.navigate(Routes.templateEditor()) },
+                    onEditTemplate = { templateId ->
+                        navController.navigate(Routes.templateEditor(templateId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.TEMPLATE_EDITOR,
+                arguments = listOf(
+                    navArgument(Routes.TEMPLATE_ID_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                TemplateEditorScreen(onDone = { navController.popBackStack() })
+            }
+            composable(Routes.REMINDERS) {
+                ReminderSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.BACKUP) {
+                BackupScreen(
+                    onBack = { navController.popBackStack() },
+                    onRestoreFinished = {
+                        // The dataset was replaced: discard the whole settings stack and
+                        // return to the start destination so no screen keeps stale data.
+                        navController.navigate(Routes.TODAY) {
+                            popUpTo(navController.graph.id) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+            composable(Routes.ARCHIVED) {
+                ArchivedRecordsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.OWNER_DETAIL,
+                arguments = listOf(navArgument(Routes.OWNER_ID_ARG) { type = NavType.StringType }),
+            ) { entry ->
+                val ownerId = entry.arguments?.getString(Routes.OWNER_ID_ARG).orEmpty()
+                OwnerDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onEditOwner = { id -> navController.navigate(Routes.ownerForm(id)) },
+                    onAddAccount = { id -> navController.navigate(Routes.accountForm(id)) },
+                    onEditAccount = { id, accountId ->
+                        navController.navigate(Routes.accountForm(id, accountId))
+                    },
+                    onCreateOrder = { accountId ->
+                        navController.navigate(Routes.orderNew(ownerId, accountId))
+                    },
+                    onOpenOrder = { orderId ->
+                        navController.navigate(Routes.orderDetail(orderId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.ORDER_NEW,
+                arguments = listOf(
+                    navArgument(Routes.OWNER_ID_ARG) { type = NavType.StringType },
+                    navArgument(Routes.ACCOUNT_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                NewOrderScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { orderId ->
+                        navController.navigate(Routes.orderDetail(orderId)) {
+                            popUpTo(Routes.ORDER_NEW) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable(
+                route = Routes.ORDER_DETAIL,
+                arguments = listOf(navArgument(Routes.ORDER_ID_ARG) { type = NavType.StringType }),
+            ) { entry ->
+                val orderId = entry.arguments?.getString(Routes.ORDER_ID_ARG).orEmpty()
+                OrderDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onBackfill = { periodId ->
+                        navController.navigate(Routes.orderBackfill(orderId, periodId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.ORDER_BACKFILL,
+                arguments = listOf(
+                    navArgument(Routes.ORDER_ID_ARG) { type = NavType.StringType },
+                    navArgument(Routes.PERIOD_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                BackfillScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.OWNER_FORM,
+                arguments = listOf(
+                    navArgument(Routes.OWNER_ID_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                OwnerFormScreen(onDone = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.ACCOUNT_FORM,
+                arguments = listOf(
+                    navArgument(Routes.OWNER_ID_ARG) { type = NavType.StringType },
+                    navArgument(Routes.ACCOUNT_ID_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                AccountFormScreen(onDone = { navController.popBackStack() })
+            }
+        }
+    }
+}
+
+private fun NavHostController.navigateToMain(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}

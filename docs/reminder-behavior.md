@@ -16,7 +16,7 @@ WorkManager 不保证精确分钟，也不使用常驻服务、精确闹钟或�
 
 ## 验证入口
 
-- JVM: `com.daigan.record.notifications.ReminderRulesTest`：刷新边界、到期包含首尾、归档/完成、补录/撤销、独立每周刷新、自定义周期、DST、独立设置、汇总导航标识。
+- JVM: `com.kuankuan.daigan.notifications.ReminderRulesTest`：刷新边界、到期包含首尾、归档/完成、补录/撤销、独立每周刷新、自定义周期、DST、独立设置、汇总导航标识。
 - 设备: `ReminderPersistenceTest`：真实 Room 设置持久化、最新完成/归档、并发去重、次日提醒、拒绝通知、配置时间前不发送；使用确定时钟和记录调度器，不等待实际期限。
 - 设备: `ReminderWorkManagerTest`：真实 WorkManager 重复刷新保持同一唯一任务与关闭取消。
 - 设备: `ReminderPermissionTest`：Android 13+ 通过真实系统 POST_NOTIFICATION app-op 禁止后无法投递，并提供正确系统设置目标；测试恢复原 app-op 状态。实际权限对话框拒绝仍需系统 UI 验证（进程内 pm revoke 会杀死测试进程）。

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import java.util.Properties
+
 @Suppress("DSL_SCOPE_VIOLATION") // Remove when fixed https://youtrack.jetbrains.com/issue/KTIJ-19369
 plugins {
     alias(libs.plugins.android.application)
@@ -24,18 +26,44 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+// Release signing is read from a local, untracked `keystore.properties` file.
+// That file is listed in .gitignore, so no key material ever reaches the repository.
+// Other machines and CI can supply the same values through environment variables:
+//   DAIGAN_KEYSTORE, DAIGAN_STORE_PASSWORD, DAIGAN_KEY_ALIAS, DAIGAN_KEY_PASSWORD
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(propertyKey: String, envKey: String): String? =
+    keystoreProperties.getProperty(propertyKey)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envKey)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("storeFile", "DAIGAN_KEYSTORE")
+val releaseStorePassword = signingValue("storePassword", "DAIGAN_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "DAIGAN_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "DAIGAN_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it != null }
+
 android {
-    namespace = "com.daigan.record"
+    namespace = "com.kuankuan.daigan"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.daigan.record"
+        applicationId = "com.kuankuan.daigan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
 
-        testInstrumentationRunner = "com.daigan.record.HiltTestRunner"
+        testInstrumentationRunner = "com.kuankuan.daigan.HiltTestRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -46,10 +74,26 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

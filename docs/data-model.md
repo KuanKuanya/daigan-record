@@ -4,7 +4,7 @@ Room/SQLite 是业务资料唯一事实来源。本文件描述已实现的持�
 提醒设置、投递去重与本机资料身份自第五阶段加入。游戏模板库自 Phase 4 起是真实
 持久化表，但只是**新建订单时的默认值**，不是业务记录的事实来源。
 
-Schema 导出位置：`app/schemas/com.daigan.record.data.local.RecordDatabase/`。
+Schema 导出位置：`app/schemas/com.kuankuan.daigan.data.local.RecordDatabase/`。
 
 | 版本 | 文件 | 状态 |
 |---|---|---|

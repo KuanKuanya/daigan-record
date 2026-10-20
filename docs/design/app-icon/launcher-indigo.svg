@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <title>代肝手账 — 靛蓝手账本图标</title>
+  <desc>Editable vector source for the adaptive launcher icon. Same path data as the Android foreground layer.</desc>
+
+  <defs>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="108" height="108" rx="24" ry="24"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <!-- background layer: ic_launcher_background.xml -->
+    <rect x="0" y="0" width="108" height="108" fill="#DDE3F7"/>
+    <circle cx="54" cy="54" r="40" fill="#C7D0EF"/>
+
+    <!-- foreground layer: ic_launcher_foreground.xml -->
+    <g transform="translate(54 54) scale(0.82) translate(-54 -54)">
+      <!-- ledger body -->
+      <path d="M39,26 H69 A9,9 0 0 1 78,35 V73 A9,9 0 0 1 69,82 H39 A9,9 0 0 1 30,73 V35 A9,9 0 0 1 39,26 Z"
+            fill="#FFF9EC" stroke="#2B3A67" stroke-width="5" stroke-linejoin="round"/>
+      <!-- binding rings -->
+      <path d="M21,36 H33" fill="none" stroke="#2B3A67" stroke-width="5" stroke-linecap="round"/>
+      <path d="M21,54 H33" fill="none" stroke="#2B3A67" stroke-width="5" stroke-linecap="round"/>
+      <path d="M21,72 H33" fill="none" stroke="#2B3A67" stroke-width="5" stroke-linecap="round"/>
+      <!-- ledger lines -->
+      <path d="M42,36 H66" fill="none" stroke="#93A0D0" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M42,45 H56" fill="none" stroke="#93A0D0" stroke-width="4.5" stroke-linecap="round"/>
+      <!-- completion check -->
+      <path d="M42,60 L51,69 L67,51" fill="none" stroke="#E5A73C" stroke-width="7.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

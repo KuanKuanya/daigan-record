@@ -18,7 +18,7 @@
 <resources>
 
     <!-- Dark launch window so the first frame matches the dark Compose theme. -->
-    <style name="Theme.DaiganRecord" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.DaiganHandbook" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/launch_background</item>
     </style>
 </resources>

@@ -28,6 +28,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "DaiganRecord"
+rootProject.name = "DaiganHandbook"
 
 include(":app")

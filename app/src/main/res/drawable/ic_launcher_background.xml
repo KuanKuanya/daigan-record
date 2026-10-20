@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Original cat-ear task notebook; approved sage/cream design. -->
+<!-- Indigo ledger icon for 代肝手账. Editable source: docs/design/app-icon/launcher-indigo.svg -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#E4EBDD" android:pathData="M0,0 H108 V108 H0 Z" />
+    <path android:fillColor="#DDE3F7" android:pathData="M0,0 H108 V108 H0 Z" />
+    <path android:fillColor="#C7D0EF" android:pathData="M54,54 m-40,0 a40,40 0 1,0 80,0 a40,40 0 1,0 -80,0" />
 </vector>

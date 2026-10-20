@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="docs/design/app-icon/launcher-sage-preview.png" width="96" alt="代肝记录：鼠尾草绿猫耳手账图标">
+  <img src="docs/design/app-icon/launcher-indigo-preview.png" width="200" alt="代肝手账：靛蓝手账本图标">
 </p>
 
-<h1 align="center">代肝记录</h1>
+<h1 align="center">代肝手账</h1>
 
 <p align="center">把老板、订单、每日打卡和收款，放进同一本小账本。</p>
 <p align="center"><strong>v1.6 Beta · Android 8.0+ · 离线使用 · 中文界面</strong></p>
 
 接的单多了，最容易混在一起的往往是这些事：今天该上哪个号、这单做到哪一天、老板付了多少、还有哪笔钱没收齐。
 
-**代肝记录**是一款为个人游戏代肝接单者制作的 Android 记录工具。把老板和账号建好，再把托管、短期任务和收款记进去，就可以从「今日事项」「账号信息」「数据统计」三个入口查看。
+**代肝手账**是一款为个人游戏代肝接单者制作的 Android 记录工具。把老板和账号建好，再把托管、短期任务和收款记进去，就可以从「今日事项」「账号信息」「数据统计」三个入口查看。
 
 游戏操作由使用者自行完成，应用负责记录任务、服务进度和账目。v1.6 修复了订单纠错、误建订单清理和归档展示问题，并新增每月固定日期任务。安装包见 Releases。
 
@@ -54,12 +54,22 @@
 ## 下载与安装
 
 - 系统要求：Android 8.0 / API 26 及以上。目前提供 Android 版本。
-- 下载位置：本仓库的 **[Releases](https://github.com/undefinedfrancis/daigan-record/releases)** 页面，选择最新 Beta，在 **Assets** 中下载 `.apk` 文件；`Source code` 是源码压缩包。
-- 当前公开下载版本：**[v1.6 Beta 1](https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.6-beta.1)**。
-- **[直接下载 Android 安装包（APK）](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.6-beta.1/daigan-record-v1.6-debug.apk)** · [SHA-256 校验文件](https://github.com/undefinedfrancis/daigan-record/releases/download/v1.6-beta.1/SHA256SUMS)
+- 下载位置：本仓库的 **[Releases](https://github.com/KuanKuanya/daigan-record/releases)** 页面，选择最新 Beta，在 **Assets** 中下载 `.apk` 文件；`Source code` 是源码压缩包。
+- 当前公开下载版本：**[v1.6 Beta 1](https://github.com/KuanKuanya/daigan-record/releases/tag/v1.6-beta.1)**。
 - 安装：在手机上打开 APK，按系统提示允许该下载来源安装应用。升级前先在应用内备份资料，尽量使用同一发布渠道的安装包覆盖升级。
 
-当前安装包使用调试签名。后续若调整分发签名，会在 Release 说明中告知安装和迁移方式。
+> **关于签名版本**：上游 v1.6 Beta 1 使用调试签名。本仓库自建的发布包使用正式签名，
+> 与上游包**签名不同、无法覆盖安装**——请先卸载旧包，或用应用内备份导出资料后再装。
+> 详见 [上游来源与改名记录](docs/upstream-foundation.md)。
+
+## 这是我的分支
+
+本仓库是 `undefinedfrancis/daigan-record` 的 fork，保留 Apache License 2.0 与全部版权声明。
+在此基础上做了**应用身份重构**（应用名「代肝手账」、包名 `com.kuankuan.daigan`、全新图标、
+正式签名），并按 [产品需求文档第 12 章](docs/prd.md) 规划了看板分组、老板 CRM、
+数据库加密、表格导出、催款卡片等功能。
+
+远端约定：`origin` 指向本 fork，`upstream` 指向原仓库，可随时同步上游修复。
 
 ## 第一次用，按这五步来
 
@@ -117,6 +127,8 @@
 
 调试包输出在 `app/build/outputs/apk/debug/app-debug.apk`。本机 SDK 路径通过 `local.properties` 或 Android Studio 配置，构建说明见 [贡献约定](CONTRIBUTING.md)。
 
+**正式签名**：release 构建的签名配置从仓库根目录的 `keystore.properties` 读取（该文件已被 `.gitignore` 排除，不会进仓库）。在其他机器或 CI 上，可用环境变量 `DAIGAN_KEYSTORE` / `DAIGAN_STORE_PASSWORD` / `DAIGAN_KEY_ALIAS` / `DAIGAN_KEY_PASSWORD` 提供同样的值。缺少这些值时 release 仍可编译，只是不签名。详见 [上游来源与改名记录](docs/upstream-foundation.md)。
+
 - [版本记录](CHANGELOG.md)
 - [产品需求文档（PRD）](docs/prd.md)
 - [文档索引](docs/README.md)
@@ -127,3 +139,5 @@
 ## 来源与许可
 
 源码底座来自 Google `android/architecture-templates`，遵循 [Apache License 2.0](LICENSE)。派生文件保留版权声明，详见 [上游来源记录](docs/upstream-foundation.md)。
+
+本仓库是 `undefinedfrancis/daigan-record` 的 fork，保留上游的 Apache License 2.0 与全部版权声明，并在此基础上做应用身份重构与功能扩展。

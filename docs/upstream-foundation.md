@@ -134,3 +134,43 @@ Navigation Compose（字符串路由 + `NavHost`）、`HiltTestRunner`、`TestIn
 - 未混用 `architecture-samples`、`nowinandroid` 的 Gradle 配置或版本目录；仅参考其
   Repository/Flow 边界思想（见架构补充文档）。
 - 未为了“看起来完成”而保留示例 `MyModel` 业务或写入演示数据。
+
+## 8. 分叉与改名记录（2026-10-20）
+
+本仓库是 `https://github.com/undefinedfrancis/daigan-record` 的 fork
+（`https://github.com/KuanKuanya/daigan-record`），保留 Apache License 2.0 与上游版权声明。
+本地远端约定：`origin` 指向 fork，`upstream` 指向原仓库，便于同步上游修复。
+
+在 fork 基础上完成了一次**应用身份重构**：
+
+| 项 | 上游 | 当前 |
+|---|---|---|
+| 应用名 | 代肝记录 | 代肝手账 |
+| `namespace` / `applicationId` | `com.daigan.record` | `com.kuankuan.daigan` |
+| `rootProject.name` | `DaiganRecord` | `DaiganHandbook` |
+| Compose 主题函数 | `DaiganRecordTheme` | `DaiganHandbookTheme` |
+| 资源样式 | `Theme.DaiganRecord` | `Theme.DaiganHandbook` |
+| 启动图标 | 鼠尾草绿猫耳手账 | 靛蓝手账本（见 [图标设计](design/app-icon/README.md)） |
+
+**未改动的兼容性标识**（刻意保留，使上游 v1.6 备份可在本版本恢复）：
+
+- 备份信封 magic `DAIGANBK`、格式标识 `daigan-backup` / `daigan-backup-data`
+- 模板交换格式 `daigan-template`
+- 备份文件名前缀 `daigan-backup-`
+- Room 数据库类名 `RecordDatabase` 与表结构、schema 版本
+
+**需要注意的影响**：
+
+- 换包名等于换了应用私有数据目录，新版本是**全新安装**，不会继承旧包名的数据。
+  跨版本迁移必须走应用内的备份导出／恢复流程。
+- 备份文件里的表数据不含包名，因此旧备份可以恢复到新包名下。
+- Room schema 导出目录随包名改为 `app/schemas/com.kuankuan.daigan.data.local.RecordDatabase/`。
+- 旧版发布包使用调试签名，与本仓库的正式签名 keystore 不同，**不能覆盖安装**。
+
+## 9. 正式签名
+
+发布用 keystore 不在仓库内。`app/build.gradle.kts` 从仓库根目录的 `keystore.properties`
+读取签名配置（该文件已被 `.gitignore` 排除），也支持用环境变量
+`DAIGAN_KEYSTORE` / `DAIGAN_STORE_PASSWORD` / `DAIGAN_KEY_ALIAS` / `DAIGAN_KEY_PASSWORD`
+在其他机器与 CI 上提供同样的值。缺少这些值时 release 构建不签名，但仍可正常编译。
+

@@ -19,15 +19,15 @@
 
 ## 验证入口
 
-JVM：`com.daigan.record.backup.BackupCryptoTest`、`BackupArchiveTest`。覆盖 AES-GCM 往返/篡改/密码边界、完整表归档往返、路径穿越、未知条目、校验和不一致。
+JVM：`com.kuankuan.daigan.backup.BackupCryptoTest`、`BackupArchiveTest`。覆盖 AES-GCM 往返/篡改/密码边界、完整表归档往返、路径穿越、未知条目、校验和不一致。
 
-设备：`com.daigan.record.backup.BackupRestoreRecoveryTest`。真实 Room 和私有文件，验证目录覆盖所有生产表列、普通/加密备份在全新数据库还原账号密码/任务/截图/提醒设置、6 个恢复转换点的异常、关闭重开与重复恢复、原附件目录不存在、损坏日志保留现场。另验证提交点取消外层任务仍完成提醒重建，以及提醒写入失败时恢复标记保留到重试成功。仅文档选择器和通知发送/调度使用替身。
+设备：`com.kuankuan.daigan.backup.BackupRestoreRecoveryTest`。真实 Room 和私有文件，验证目录覆盖所有生产表列、普通/加密备份在全新数据库还原账号密码/任务/截图/提醒设置、6 个恢复转换点的异常、关闭重开与重复恢复、原附件目录不存在、损坏日志保留现场。另验证提交点取消外层任务仍完成提醒重建，以及提醒写入失败时恢复标记保留到重试成功。仅文档选择器和通知发送/调度使用替身。
 
 真实进程死亡单独运行，不能把预期的 instrumentation 终止当作普通测试通过：
 
 ```sh
-adb shell am instrument -w -r -e class com.daigan.record.backup.BackupRestoreRecoveryTest#processDeathPrepare -e crashAt FILES_SWAPPED com.daigan.record.test/com.daigan.record.HiltTestRunner
-adb shell am instrument -w -r -e class com.daigan.record.backup.BackupRestoreRecoveryTest#processDeathRecover com.daigan.record.test/com.daigan.record.HiltTestRunner
+adb shell am instrument -w -r -e class com.kuankuan.daigan.backup.BackupRestoreRecoveryTest#processDeathPrepare -e crashAt FILES_SWAPPED com.kuankuan.daigan.test/com.kuankuan.daigan.HiltTestRunner
+adb shell am instrument -w -r -e class com.kuankuan.daigan.backup.BackupRestoreRecoveryTest#processDeathRecover com.kuankuan.daigan.test/com.kuankuan.daigan.HiltTestRunner
 ```
 
 实际 runner 名称以项目配置为准。对 PREPARED、ROLLBACK_READY、ORIGINAL_FILES_MOVED、FILES_SWAPPED、DATABASE_COMMITTED、DB_COMMITTED 分别运行。第一条应因应用主动杀进程终止；第二条在独立进程验证完整原/新资料和日志清除。两次之间不要卸载或清空测试应用缓存。无 crashAt 的普通全套测试不会杀进程。完整设备验证证据由第五阶段交接报告记录，本说明不宣称未运行的测试通过。
