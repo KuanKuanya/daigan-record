@@ -133,6 +133,7 @@
 
 - [版本记录](CHANGELOG.md)
 - [产品需求文档（PRD）](docs/prd.md)
+- [开发期测试指南](docs/dev-testing.md)
 - [文档索引](docs/README.md)
 - [测试与验收](docs/testing.md)
 - [Beta 发布准备](docs/beta-release.md)

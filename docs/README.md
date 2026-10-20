@@ -28,6 +28,10 @@
 - [备份与恢复流程](backup-recovery.md)
 - [提醒行为](reminder-behavior.md)
 
+## 开发与调试
+
+- [开发期测试指南](dev-testing.md) — 四层测试回路、造数据、调试技巧与常见坑
+
 ## 设计与开发历史
 
 - [猫耳任务手账图标](design/app-icon/README.md)
