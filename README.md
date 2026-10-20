@@ -118,6 +118,7 @@
 调试包输出在 `app/build/outputs/apk/debug/app-debug.apk`。本机 SDK 路径通过 `local.properties` 或 Android Studio 配置，构建说明见 [贡献约定](CONTRIBUTING.md)。
 
 - [版本记录](CHANGELOG.md)
+- [产品需求文档（PRD）](docs/prd.md)
 - [文档索引](docs/README.md)
 - [测试与验收](docs/testing.md)
 - [Beta 发布准备](docs/beta-release.md)
