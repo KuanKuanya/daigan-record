@@ -55,11 +55,13 @@
 
 - 系统要求：Android 8.0 / API 26 及以上。目前提供 Android 版本。
 - 下载位置：本仓库的 **[Releases](https://github.com/KuanKuanya/daigan-record/releases)** 页面，选择最新 Beta，在 **Assets** 中下载 `.apk` 文件；`Source code` 是源码压缩包。
-- 当前公开下载版本：**[v1.6 Beta 1](https://github.com/KuanKuanya/daigan-record/releases/tag/v1.6-beta.1)**。
+- 当前公开下载版本：**[v1.7 Beta 1](https://github.com/KuanKuanya/daigan-record/releases/tag/v1.7-beta.1)**（本 fork 的应用身份重构版，正式签名）。
+- **[直接下载 Android 安装包（APK）](https://github.com/KuanKuanya/daigan-record/releases/download/v1.7-beta.1/daigan-handbook-v1.7-release.apk)** · [SHA-256 校验文件](https://github.com/KuanKuanya/daigan-record/releases/download/v1.7-beta.1/SHA256SUMS)
+- 上游原版（调试签名）：[v1.6 Beta 1](https://github.com/undefinedfrancis/daigan-record/releases/tag/v1.6-beta.1)
 - 安装：在手机上打开 APK，按系统提示允许该下载来源安装应用。升级前先在应用内备份资料，尽量使用同一发布渠道的安装包覆盖升级。
 
-> **关于签名版本**：上游 v1.6 Beta 1 使用调试签名。本仓库自建的发布包使用正式签名，
-> 与上游包**签名不同、无法覆盖安装**——请先卸载旧包，或用应用内备份导出资料后再装。
+> **关于签名版本**：上游 v1.6 Beta 1 使用调试签名，本仓库 v1.7 使用正式签名，
+> 两者**签名不同、无法覆盖安装**——请先卸载旧包，或用应用内备份导出资料后再装。
 > 详见 [上游来源与改名记录](docs/upstream-foundation.md)。
 
 ## 这是我的分支
